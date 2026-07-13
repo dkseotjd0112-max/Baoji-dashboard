@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>바오지 재고·판매 대시보드</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+
+<style>
+:root{
+  --color-primary-100:#B7C4E0; --color-primary-300:#5B7FD9; --color-primary-500:#3A5CD0; --color-primary-700:#1E337A;
+  --color-success-fg:#2DC07A; --color-error-fg:#FF4D6D; --color-info-fg:#4FA0FF; --color-warning-fg:#FFB84F;
+  --bg-base:#000000; --bg-subtle:#0A0A0F; --bg-elevated:#141418;
+  --text-primary:#FFFFFF; --text-secondary:rgba(255,255,255,0.78); --text-tertiary:rgba(255,255,255,0.55);
+  --border-default:rgba(255,255,255,0.08); --border-strong:rgba(255,255,255,0.18);
+  --radius-md:8px; --radius-lg:12px; --radius-full:9999px;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  background:radial-gradient(1200px 600px at 80% -10%, rgba(58,92,208,0.22), transparent 60%), var(--bg-base);
+  color:var(--text-primary); min-height:100vh; -webkit-font-smoothing:antialiased;}
+.wrap{max-width:1440px;margin:0 auto;padding:22px 20px 60px;}
+
+.topbar{display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap;}
+.title h1{margin:0;font-size:20px;font-weight:700;letter-spacing:-0.01em;}
+.title .sub{font-size:12px;color:var(--text-tertiary);margin-top:3px;}
+.topbar .spacer{flex:1;}
+.period{font-size:12px;color:var(--text-secondary);background:rgba(255,255,255,.05);
+  border:1px solid var(--border-default);border-radius:var(--radius-full);padding:7px 14px;white-space:nowrap;}
+.period b{color:#fff;}
+.btn-file{font:600 12px/1 'Pretendard',sans-serif;border:1px solid var(--border-strong);background:rgba(255,255,255,.06);
+  color:#fff;border-radius:var(--radius-full);padding:9px 16px;cursor:pointer;}
+.btn-file:hover{background:rgba(255,255,255,.14);}
+.live{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--text-tertiary);}
+.live .dot{width:7px;height:7px;border-radius:50%;background:var(--color-success-fg);}
+.live.on .dot{animation:pulse 2s infinite;}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(45,192,122,.5);}70%{box-shadow:0 0 0 7px rgba(45,192,122,0);}100%{box-shadow:0 0 0 0 rgba(45,192,122,0);}}
+
+.tabs{display:flex;gap:8px;margin-bottom:18px;}
+.tab-btn{font:700 13px/1 'Pretendard',sans-serif;border:1px solid var(--border-default);background:var(--bg-elevated);
+  color:var(--text-secondary);border-radius:var(--radius-full);padding:10px 20px;cursor:pointer;transition:.15s;}
+.tab-btn.active{background:var(--color-primary-500);color:#fff;border-color:var(--color-primary-500);}
+.tab-btn:hover:not(.active){color:#fff;border-color:var(--border-strong);}
+.view{display:none;} .view.on{display:block;}
+
+.filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:18px;
+  background:var(--bg-elevated);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:14px 16px;}
+.filters .fl{display:flex;flex-direction:column;gap:5px;}
+.filters label{font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-tertiary);}
+.filters select{appearance:none;background:rgba(255,255,255,.06) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238A8D99' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>") no-repeat right 10px center;
+  border:1px solid var(--border-default);color:#fff;border-radius:var(--radius-md);padding:9px 30px 9px 12px;font:500 13px/1 'Pretendard',sans-serif;cursor:pointer;min-width:110px;}
+.filters .chk{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary);}
+.filters .reset{margin-left:auto;}
+.btn-reset{font:600 12px/1 'Pretendard',sans-serif;border:1px solid var(--border-default);background:transparent;color:var(--text-secondary);
+  border-radius:var(--radius-full);padding:9px 16px;cursor:pointer;}
+.btn-reset:hover{border-color:var(--border-strong);color:#fff;}
+
+.kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:18px;}
+.kpi{background:var(--bg-elevated);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:16px;position:relative;overflow:hidden;}
+.kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--color-primary-500);}
+.kpi.warn::before{background:var(--color-warning-fg);}
+.kpi .k-label{font-size:11px;color:var(--text-tertiary);font-weight:600;}
+.kpi .k-val{font-size:24px;font-weight:700;margin-top:7px;font-variant-numeric:tabular-nums;}
+.kpi .k-sub{font-size:11px;color:var(--text-tertiary);margin-top:5px;}
+
+.card{background:var(--bg-elevated);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:18px;}
+.card h3{margin:0 0 4px;font-size:15px;font-weight:700;}
+.card .q{font-size:11px;color:var(--text-tertiary);margin:0 0 14px;}
+.chart-box{position:relative;width:100%;}
+.h-mid{height:300px;} .h-tall{height:340px;}
+.section{margin-bottom:18px;}
+.grid-2{display:grid;grid-template-columns:1.1fr 1.4fr;gap:14px;}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+
+.drill{display:none;align-items:center;gap:10px;background:rgba(58,92,208,.18);border:1px solid var(--color-primary-300);
+  border-radius:var(--radius-full);padding:8px 14px;margin-bottom:14px;font-size:12px;color:var(--text-secondary);}
+.drill.on{display:flex;}
+.drill b{color:#fff;}
+.drill .x{margin-left:6px;cursor:pointer;background:rgba(255,255,255,.14);border-radius:50%;width:18px;height:18px;display:grid;place-items:center;font-size:12px;color:#fff;}
+
+.table-head{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap;}
+.table-head h3{margin:0;}
+.search{flex:1;min-width:220px;max-width:420px;position:relative;}
+.search input{width:100%;background:rgba(255,255,255,.06);border:1px solid var(--border-default);border-radius:var(--radius-full);
+  padding:11px 16px 11px 38px;color:#fff;font:400 13px/1.3 'Pretendard',sans-serif;}
+.search .ic{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--text-tertiary);font-size:14px;}
+.row-count{font-size:12px;color:var(--text-tertiary);margin-left:auto;}
+.tbl-scroll{overflow:auto;border:1px solid var(--border-default);border-radius:var(--radius-md);max-height:480px;}
+table{width:100%;border-collapse:collapse;font-size:12.5px;white-space:nowrap;}
+thead th{position:sticky;top:0;background:#16161c;color:var(--text-secondary);font-weight:600;text-align:left;
+  padding:11px 12px;border-bottom:1px solid var(--border-strong);cursor:pointer;user-select:none;font-size:11.5px;}
+thead th:hover{color:#fff;}
+thead th .ar{opacity:.5;font-size:9px;margin-left:3px;}
+tbody td{padding:9px 12px;border-bottom:1px solid rgba(255,255,255,.04);color:var(--text-secondary);}
+tbody tr:hover td{background:rgba(255,255,255,.03);color:#fff;}
+tbody tr.need td{background:rgba(255,77,109,.08);}
+td.num{text-align:right;font-variant-numeric:tabular-nums;}
+.badge{display:inline-block;padding:2px 8px;border-radius:var(--radius-full);font-size:10.5px;font-weight:600;}
+.badge.need{background:rgba(255,77,109,.16);color:var(--color-error-fg);}
+.badge.ok{background:rgba(45,192,122,.14);color:var(--color-success-fg);}
+
+.status{display:none;text-align:center;padding:60px 20px;color:var(--text-secondary);}
+.status.on{display:block;}
+.status .big{font-size:17px;font-weight:600;color:#fff;margin-bottom:8px;}
+.status .small{font-size:13px;color:var(--text-tertiary);line-height:1.6;}
+.dropzone{margin:18px auto 0;max-width:460px;border:1.5px dashed var(--border-strong);border-radius:var(--radius-lg);padding:28px;cursor:pointer;}
+.dropzone:hover,.dropzone.drag{border-color:var(--color-primary-300);background:rgba(58,92,208,.1);}
+.spinner{width:34px;height:34px;border:3px solid rgba(255,255,255,.15);border-top-color:var(--color-primary-300);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+#dash{display:none;} #dash.on{display:block;}
+
+@media(max-width:1100px){.kpi-row{grid-template-columns:repeat(3,1fr);} .grid-2{grid-template-columns:1fr;} .grid-3{grid-template-columns:1fr;}}
+@media(max-width:680px){.kpi-row{grid-template-columns:repeat(2,1fr);} .title h1{font-size:17px;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="topbar">
+    <div class="title">
+      <h1>바오지 재고·판매 대시보드</h1>
+      <div class="sub">Baoji Inventory &amp; Sales · 실시간 웹 대시보드</div>
+    </div>
+    <div class="spacer"></div>
+    <span id="live" class="live"><span class="dot"></span><span id="liveTxt">연결 대기</span></span>
+    <span class="period">기준 <b id="period">—</b></span>
+    <button class="btn-file" id="fileBtn">파일 불러오기</button>
+    <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none" />
+  </header>
+
+  <div id="loading" class="status on">
+    <div class="spinner"></div>
+    <div class="big">데이터를 불러오는 중입니다</div>
+    <div class="small">data.xlsx 파일을 읽고 있습니다…</div>
+  </div>
+
+  <div id="errorState" class="status">
+    <div class="big">데이터를 불러오지 못했습니다</div>
+    <div class="small" id="errMsg">같은 폴더에 <b>data.xlsx</b> 파일이 있는지 확인해 주세요.</div>
+    <div class="dropzone" id="dropzone">
+      <div class="big" style="font-size:14px;">파일 직접 선택 또는 여기로 드래그&amp;드롭</div>
+      <div class="small">data.xlsx 파일을 올리면 대시보드가 표시됩니다.</div>
+    </div>
+  </div>
+
+  <div id="dash">
+
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="inv">재고 / 발주 현황</button>
+      <button class="tab-btn" data-tab="ord">주문 분석</button>
+    </div>
+
+    <!-- ══════════════════ 재고/발주 현황 ══════════════════ -->
+    <div class="view on" id="view-inv">
+      <section class="filters" id="filters-inv">
+        <div class="fl"><label>카테고리</label><select id="i-category"></select></div>
+        <div class="fl"><label>성별</label><select id="i-gender"></select></div>
+        <div class="chk"><input type="checkbox" id="i-onlyNeed" /><label for="i-onlyNeed">발주필요만 보기</label></div>
+        <div class="reset"><button class="btn-reset" id="i-resetBtn">필터 초기화</button></div>
+      </section>
+
+      <section class="kpi-row" id="i-kpiRow"></section>
+
+      <section class="section grid-2">
+        <div class="card">
+          <h3>카테고리별 재고 비중</h3><p class="q">현재고가 어느 카테고리에 몰려 있나? (조각 클릭 → 상세 필터)</p>
+          <div class="chart-box h-mid"><canvas id="i-ch-cat"></canvas></div>
+        </div>
+        <div class="card">
+          <h3>판매수량 TOP 10 SKU</h3><p class="q">가장 잘 팔리는 SKU는? (누적판매 기준)</p>
+          <div class="chart-box h-mid"><canvas id="i-ch-top"></canvas></div>
+        </div>
+      </section>
+
+      <section class="section card">
+        <div class="table-head">
+          <h3>재고 상세 (발주필요 우선 정렬)</h3>
+          <div class="search"><span class="ic">🔍</span><input type="text" id="i-searchBox" placeholder="상품코드, 상품명, 모델명 검색…" /></div>
+          <span class="row-count" id="i-rowCount"></span>
+        </div>
+        <div class="tbl-scroll">
+          <table id="i-table"><thead><tr id="i-theadRow"></tr></thead><tbody id="i-tbody"></tbody></table>
+        </div>
+      </section>
+    </div>
+
+    <!-- ══════════════════ 주문 분석 ══════════════════ -->
+    <div class="view" id="view-ord">
+      <section class="filters" id="filters-ord">
+        <div class="fl"><label>연월</label><select id="o-ym"></select></div>
+        <div class="fl"><label>카테고리</label><select id="o-category"></select></div>
+        <div class="fl"><label>판매처</label><select id="o-channel"></select></div>
+        <div class="fl"><label>출고유형</label><select id="o-type"></select></div>
+        <div class="fl"><label>성별</label><select id="o-gender"></select></div>
+        <div class="reset"><button class="btn-reset" id="o-resetBtn">필터 초기화</button></div>
+      </section>
+
+      <section class="kpi-row" id="o-kpiRow"></section>
+
+      <section class="section card">
+        <h3>일별 판매수량 추이</h3><p class="q">시간에 따른 출고량 흐름은?</p>
+        <div class="chart-box" style="height:300px;"><canvas id="o-ch-trend"></canvas></div>
+      </section>
+
+      <section class="section grid-3">
+        <div class="card">
+          <h3>카테고리별 판매</h3><p class="q">어느 카테고리가 많이 나가나?</p>
+          <div class="chart-box h-mid"><canvas id="o-ch-cat"></canvas></div>
+        </div>
+        <div class="card">
+          <h3>판매처별 판매</h3><p class="q">어느 채널이 많이 파나?</p>
+          <div class="chart-box h-mid"><canvas id="o-ch-channel"></canvas></div>
+        </div>
+        <div class="card">
+          <h3>출고유형별 판매</h3><p class="q">일반판매 vs 체험단 vs 유투버</p>
+          <div class="chart-box h-mid"><canvas id="o-ch-type"></canvas></div>
+        </div>
+      </section>
+
+      <section class="section card">
+        <h3>판매수량 TOP 10 SKU</h3><p class="q">(현재 필터 기준)</p>
+        <div class="chart-box h-tall"><canvas id="o-ch-top"></canvas></div>
+      </section>
+
+      <section class="section card">
+        <div class="drill" id="o-drill"><span>드릴다운: <b id="o-drillTxt"></b></span><span class="x" id="o-drillX">×</span></div>
+        <div class="table-head">
+          <h3>상세 주문 내역</h3>
+          <div class="search"><span class="ic">🔍</span><input type="text" id="o-searchBox" placeholder="상품코드, 모델명, 판매처 검색…" /></div>
+          <span class="row-count" id="o-rowCount"></span>
+        </div>
+        <div class="tbl-scroll">
+          <table id="o-table"><thead><tr id="o-theadRow"></tr></thead><tbody id="o-tbody"></tbody></table>
+        </div>
+      </section>
+    </div>
+
+  </div><!-- /dash -->
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════════
+   설정 - data.xlsx 안에 "재고현황"/"주문로그" 두 시트가 있어야 함
+════════════════════════════════════════════════════════ */
+const DATA_URL = './data.xlsx';
+const REFRESH_MS = 60000;
+const SHEET_INV = '재고현황';
+const SHEET_ORD = '주문로그';
+
+const state = {
+  inv:[], ord:[],
+  invFilters:{category:'ALL',gender:'ALL',onlyNeed:false}, invSearch:'', invSort:{col:'needOrder',dir:-1},
+  ordFilters:{ym:'ALL',category:'ALL',channel:'ALL',type:'ALL',gender:'ALL'}, ordSearch:'', ordSort:{col:'date',dir:-1}, ordDrill:null,
+  charts:{}, refreshTimer:null,
+};
+
+const toNum = v => { if(v==null||v==='')return 0; const n=parseFloat(String(v).replace(/,/g,'')); return isNaN(n)?0:n; };
+const fmtNum = v => Math.round(v).toLocaleString('en-US');
+const fmtDate = d => d ? d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0') : '';
+
+function parseDate(v){
+  if(v==null||v==='') return null;
+  if(v instanceof Date) return isNaN(v)?null:v;
+  if(typeof v==='number' || (/^\d+(\.\d+)?$/.test(String(v).trim()))){
+    const serial = typeof v==='number' ? v : parseFloat(v);
+    if(serial>0 && serial<60000 && XLSX.SSF && XLSX.SSF.parse_date_code){
+      const o = XLSX.SSF.parse_date_code(serial);
+      if(o) return new Date(o.y, o.m-1, o.d, o.H||0, o.M||0, o.S||0);
+    }
+  }
+  const p = new Date(v);
+  return isNaN(p) ? null : p;
+}
+
+/* ════════════════════════════════════════════════════════
+   데이터 로드
+════════════════════════════════════════════════════════ */
+const isHttp = location.protocol==='http:'||location.protocol==='https:';
+
+function showError(msg){
+  document.getElementById('loading').classList.remove('on');
+  document.getElementById('dash').classList.remove('on');
+  document.getElementById('errorState').classList.add('on');
+  if(msg) document.getElementById('errMsg').innerHTML=msg;
+}
+function setLive(on,txt){
+  document.getElementById('live').classList.toggle('on',on);
+  document.getElementById('liveTxt').textContent=txt;
+}
+
+async function fetchData(initial){
+  try{
+    const url = DATA_URL + '?t=' + Date.now();
+    const res = await fetch(url,{cache:'no-store'});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const buf = await res.arrayBuffer();
+    parseWorkbook(buf);
+    setLive(true,'실시간 연결 · 60초마다 갱신');
+  }catch(err){
+    if(initial){
+      showError('같은 폴더에 <b>data.xlsx</b> 파일이 있는지 확인해 주세요.<br><span style="opacity:.7">('+err.message+')</span><br>아래에서 파일을 직접 선택할 수도 있습니다.');
+    }
+    setLive(false,'갱신 실패 — 이전 데이터 유지');
+  }
+}
+function loadFile(file){
+  const r = new FileReader();
+  r.onload = e => { try{ parseWorkbook(e.target.result); setLive(false,'파일 모드 · '+file.name); }
+    catch(err){ showError('파일을 읽지 못했습니다.<br><span style="opacity:.7">('+err.message+')</span>'); } };
+  r.onerror = () => showError('파일을 읽지 못했습니다.');
+  r.readAsArrayBuffer(file);
+}
+
+function sheetToRows(wb, name){
+  const ws = wb.Sheets[name];
+  if(!ws) return null;
+  return XLSX.utils.sheet_to_json(ws,{defval:''});
+}
+
+function parseWorkbook(buf){
+  const wb = XLSX.read(buf,{type:'array',cellDates:true});
+  const rawInv = sheetToRows(wb, SHEET_INV);
+  const rawOrd = sheetToRows(wb, SHEET_ORD);
+  if(!rawInv && !rawOrd) throw new Error(`'${SHEET_INV}' 또는 '${SHEET_ORD}' 시트를 찾을 수 없습니다`);
+
+  state.inv = (rawInv||[]).map(r=>({
+    code:r['상품코드']||'', name:r['상품명']||'', category:r['카테고리']||'', model:r['모델명']||'',
+    gender:r['성별']||'', size:r['사이즈']||'', stock:toNum(r['현재고']), safeStock:toNum(r['안전재고']),
+    baseStock:toNum(r['적용기준재고']), shortage:toNum(r['부족수량']),
+    needOrder: String(r['발주필요']||'')==='발주필요',
+    cumQty:toNum(r['누적판매수량']), expQty:toNum(r['체험단판매수량']),
+    last7:toNum(r['최근7일판매']), last2m:toNum(r['2개월판매']),
+  }));
+
+  state.ord = (rawOrd||[]).map(r=>{
+    const d = parseDate(r['날짜']);
+    return { date:d, ym: d? d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'):'',
+      code:r['상품코드']||'', category:r['카테고리']||'', model:r['모델명']||'',
+      channel:r['판매처']||'', type:r['출고유형']||'', size:r['사이즈']||'', gender:r['성별']||'',
+      qty:toNum(r['수량']) };
+  }).filter(r=>r.date);
+
+  document.getElementById('period').textContent = new Date().toLocaleString('ko-KR',{hour12:false});
+
+  buildInvFilters(); renderInv();
+  buildOrdFilters(); renderOrd();
+
+  document.getElementById('loading').classList.remove('on');
+  document.getElementById('errorState').classList.remove('on');
+  document.getElementById('dash').classList.add('on');
+}
+
+/* ════════════════════════════════════════════════════════
+   공통 헬퍼
+════════════════════════════════════════════════════════ */
+function uniq(rows,field){ return [...new Set(rows.map(r=>r[field]).filter(v=>v!==''&&v!=null))]; }
+function fillSelect(id,opts,cur,allLabel){
+  const sel=document.getElementById(id);
+  const keep = opts.includes(cur)||cur==='ALL' ? cur : 'ALL';
+  sel.innerHTML = `<option value="ALL">${allLabel}</option>`+opts.map(o=>`<option value="${o}">${o}</option>`).join('');
+  sel.value=keep;
+}
+function groupSum(rows,field,valField){ const m={};
+  rows.forEach(r=>{const k=r[field]||'(미지정)'; m[k]=(m[k]||0)+(valField?r[valField]:1);});
+  return m; }
+
+Chart.defaults.color='rgba(255,255,255,0.62)';
+Chart.defaults.font.family="'Pretendard',sans-serif";
+Chart.defaults.font.size=11;
+const GRID='rgba(255,255,255,0.06)';
+const PALETTE=['#3A5CD0','#5B7FD9','#8FA6E8','#4FBFB8','#2DC07A','#FFB84F','#FF4D6D','#B7C4E0'];
+const tip = { backgroundColor:'#16161c', borderColor:'rgba(255,255,255,.12)', borderWidth:1,
+  titleColor:'#fff', bodyColor:'rgba(255,255,255,.85)', padding:10, cornerRadius:8, displayColors:true };
+function destroy(id){ if(state.charts[id]){state.charts[id].destroy();delete state.charts[id];} }
+function mk(id,cfg){ destroy(id); state.charts[id]=new Chart(document.getElementById(id),cfg); }
+
+/* ════════════════════════════════════════════════════════
+   ① 재고 / 발주 현황
+════════════════════════════════════════════════════════ */
+function buildInvFilters(){
+  fillSelect('i-category',uniq(state.inv,'category').sort(),state.invFilters.category,'전체 카테고리');
+  fillSelect('i-gender',uniq(state.inv,'gender').sort(),state.invFilters.gender,'전체 성별');
+  document.getElementById('i-onlyNeed').checked = state.invFilters.onlyNeed;
+}
+function invFilteredRows(){
+  const f=state.invFilters;
+  return state.inv.filter(r=>
+    (f.category==='ALL'||r.category===f.category) &&
+    (f.gender==='ALL'||r.gender===f.gender) &&
+    (!f.onlyNeed || r.needOrder));
+}
+function renderInv(){ renderInvKPI(); renderInvCat(); renderInvTop(); renderInvTable(); }
+
+function renderInvKPI(){
+  const rows=invFilteredRows();
+  const totalStock=rows.reduce((a,r)=>a+r.stock,0);
+  const needCnt=rows.filter(r=>r.needOrder).length;
+  const last7=rows.reduce((a,r)=>a+r.last7,0);
+  const last2m=rows.reduce((a,r)=>a+r.last2m,0);
+  const cards=[
+    {label:'관리 SKU 수', val:fmtNum(rows.length)},
+    {label:'총 재고', val:fmtNum(totalStock)+'개'},
+    {label:'발주 필요 SKU', val:fmtNum(needCnt)+'개', warn:needCnt>0},
+    {label:'최근 7일 판매', val:fmtNum(last7)+'개'},
+    {label:'최근 2개월 판매', val:fmtNum(last2m)+'개'},
+  ];
+  document.getElementById('i-kpiRow').innerHTML = cards.map(c=>
+    `<div class="kpi ${c.warn?'warn':''}"><div class="k-label">${c.label}</div><div class="k-val">${c.val}</div></div>`).join('');
+}
+function renderInvCat(){
+  const g=groupSum(invFilteredRows(),'category','stock');
+  const labels=Object.keys(g).sort((a,b)=>g[b]-g[a]);
+  mk('i-ch-cat',{type:'doughnut',data:{labels,datasets:[{data:labels.map(l=>g[l]),backgroundColor:PALETTE,borderColor:'#141418',borderWidth:2,hoverOffset:6}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
+      onClick:(e,el)=>{if(el.length){document.getElementById('i-category').value=labels[el[0].index];state.invFilters.category=labels[el[0].index];renderInv();}},
+      plugins:{legend:{position:'right',labels:{boxWidth:11,boxHeight:11,padding:10}},
+        tooltip:{...tip,callbacks:{label:c=>{const t=c.dataset.data.reduce((a,b)=>a+b,0);return ` ${c.label}: ${fmtNum(c.parsed)}개 (${(c.parsed/t*100).toFixed(1)}%)`;}}}}}});
+}
+function renderInvTop(){
+  const rows=invFilteredRows().slice().sort((a,b)=>b.cumQty-a.cumQty).slice(0,10);
+  mk('i-ch-top',{type:'bar',data:{labels:rows.map(r=>r.code),datasets:[{label:'누적판매수량',data:rows.map(r=>r.cumQty),backgroundColor:'#3A5CD0',borderRadius:4}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{...tip,callbacks:{label:c=>' 누적판매: '+fmtNum(c.parsed.x)+'개'}}},
+      scales:{x:{grid:{color:GRID}},y:{grid:{display:false},ticks:{font:{size:10}}}}}});
+}
+const ITCOLS=[
+  {k:'needOrder',t:'발주'},{k:'code',t:'상품코드'},{k:'name',t:'상품명'},{k:'category',t:'카테고리'},
+  {k:'model',t:'모델명'},{k:'gender',t:'성별'},{k:'size',t:'사이즈',num:1},
+  {k:'stock',t:'현재고',num:1},{k:'safeStock',t:'안전재고',num:1},{k:'shortage',t:'부족수량',num:1},
+  {k:'last7',t:'최근7일',num:1},{k:'last2m',t:'2개월',num:1},{k:'cumQty',t:'누적판매',num:1},
+];
+function invTableRows(){
+  let rows=invFilteredRows();
+  const q=state.invSearch.trim().toLowerCase();
+  if(q) rows=rows.filter(r=>[r.code,r.name,r.model].some(v=>String(v).toLowerCase().includes(q)));
+  const {col,dir}=state.invSort;
+  rows=rows.slice().sort((a,b)=>{let x=a[col],y=b[col];
+    if(typeof x==='boolean') { x=x?1:0; y=y?1:0; }
+    if(typeof x==='number'&&typeof y==='number') return (x-y)*dir;
+    return String(x).localeCompare(String(y),'ko')*dir;});
+  return rows;
+}
+function renderInvTable(){
+  const head=document.getElementById('i-theadRow');
+  head.innerHTML=ITCOLS.map(c=>{const act=state.invSort.col===c.k; const ar=act?(state.invSort.dir>0?'▲':'▼'):'⇅';
+    return `<th data-col="${c.k}" class="${c.num?'num':''}">${c.t}<span class="ar">${ar}</span></th>`;}).join('');
+  head.querySelectorAll('th').forEach(th=>th.onclick=()=>{
+    const c=th.dataset.col; if(state.invSort.col===c) state.invSort.dir*=-1; else {state.invSort.col=c;state.invSort.dir=1;}
+    renderInvTable();});
+  const rows=invTableRows(); const MAX=300;
+  document.getElementById('i-tbody').innerHTML = rows.slice(0,MAX).map(r=>`<tr class="${r.needOrder?'need':''}">
+    <td>${r.needOrder?'<span class="badge need">발주필요</span>':'<span class="badge ok">정상</span>'}</td>
+    <td>${r.code}</td><td>${r.name}</td><td>${r.category}</td><td>${r.model}</td><td>${r.gender}</td>
+    <td class="num">${r.size}</td><td class="num">${fmtNum(r.stock)}</td><td class="num">${fmtNum(r.safeStock)}</td>
+    <td class="num">${fmtNum(r.shortage)}</td><td class="num">${fmtNum(r.last7)}</td><td class="num">${fmtNum(r.last2m)}</td>
+    <td class="num">${fmtNum(r.cumQty)}</td></tr>`).join('')
+    || `<tr><td colspan="${ITCOLS.length}" style="text-align:center;padding:30px;color:var(--text-tertiary)">조건에 맞는 데이터가 없습니다.</td></tr>`;
+  document.getElementById('i-rowCount').textContent = `${fmtNum(rows.length)}건`+(rows.length>MAX?` (상위 ${MAX}건 표시)`:'');
+}
+
+['category','gender'].forEach(k=>{
+  document.getElementById('i-'+k).addEventListener('change',e=>{state.invFilters[k]=e.target.value;renderInv();});
+});
+document.getElementById('i-onlyNeed').addEventListener('change',e=>{state.invFilters.onlyNeed=e.target.checked;renderInv();});
+document.getElementById('i-resetBtn').addEventListener('click',()=>{
+  state.invFilters={category:'ALL',gender:'ALL',onlyNeed:false}; state.invSearch=''; document.getElementById('i-searchBox').value='';
+  buildInvFilters(); renderInv();});
+document.getElementById('i-searchBox').addEventListener('input',e=>{state.invSearch=e.target.value;renderInvTable();});
+
+/* ════════════════════════════════════════════════════════
+   ② 주문 분석
+════════════════════════════════════════════════════════ */
+function buildOrdFilters(){
+  const yms=[...new Set(state.ord.map(r=>r.ym))].sort().reverse();
+  fillSelect('o-ym',yms,state.ordFilters.ym,'전체 기간');
+  fillSelect('o-category',uniq(state.ord,'category').sort(),state.ordFilters.category,'전체 카테고리');
+  fillSelect('o-channel',uniq(state.ord,'channel').sort(),state.ordFilters.channel,'전체 판매처');
+  fillSelect('o-type',uniq(state.ord,'type').sort(),state.ordFilters.type,'전체 유형');
+  fillSelect('o-gender',uniq(state.ord,'gender').sort(),state.ordFilters.gender,'전체 성별');
+}
+function ordFilteredRows(){
+  const f=state.ordFilters;
+  return state.ord.filter(r=>
+    (f.ym==='ALL'||r.ym===f.ym) && (f.category==='ALL'||r.category===f.category) &&
+    (f.channel==='ALL'||r.channel===f.channel) && (f.type==='ALL'||r.type===f.type) &&
+    (f.gender==='ALL'||r.gender===f.gender));
+}
+function renderOrd(){ renderOrdKPI(); renderOrdTrend(); renderOrdCat(); renderOrdChannel(); renderOrdType(); renderOrdTop(); renderOrdTable(); }
+
+function renderOrdKPI(){
+  const rows=ordFilteredRows();
+  const total=rows.reduce((a,r)=>a+r.qty,0);
+  const exp=rows.filter(r=>r.type==='체험단').reduce((a,r)=>a+r.qty,0);
+  const norm=rows.filter(r=>r.type==='일반판매').reduce((a,r)=>a+r.qty,0);
+  const cards=[
+    {label:'총 판매수량',val:fmtNum(total)+'개'},
+    {label:'일반판매',val:fmtNum(norm)+'개'},
+    {label:'체험단',val:fmtNum(exp)+'개'},
+    {label:'거래 건수',val:fmtNum(rows.length)+'건'},
+    {label:'SKU 종류',val:fmtNum(new Set(rows.map(r=>r.code)).size)+'개'},
+  ];
+  document.getElementById('o-kpiRow').innerHTML = cards.map(c=>
+    `<div class="kpi"><div class="k-label">${c.label}</div><div class="k-val">${c.val}</div></div>`).join('');
+}
+function renderOrdTrend(){
+  const rows=ordFilteredRows();
+  const m={}; rows.forEach(r=>{const k=fmtDate(r.date); m[k]=(m[k]||0)+r.qty;});
+  const labels=Object.keys(m).sort();
+  mk('o-ch-trend',{type:'bar',data:{labels,datasets:[{label:'판매수량',data:labels.map(l=>m[l]),backgroundColor:'#3A5CD0',borderRadius:3}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:tip},
+      scales:{x:{grid:{display:false},ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:16}},y:{grid:{color:GRID}}}}});
+}
+function renderOrdCat(){
+  const g=groupSum(ordFilteredRows(),'category','qty');
+  const labels=Object.keys(g).sort((a,b)=>g[b]-g[a]);
+  mk('o-ch-cat',{type:'doughnut',data:{labels,datasets:[{data:labels.map(l=>g[l]),backgroundColor:PALETTE,borderColor:'#141418',borderWidth:2,hoverOffset:6}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
+      onClick:(e,el)=>{if(el.length)setOrdDrill('category',labels[el[0].index]);},
+      plugins:{legend:{position:'bottom',labels:{boxWidth:10,boxHeight:10,padding:8}},
+        tooltip:{...tip,callbacks:{label:c=>{const t=c.dataset.data.reduce((a,b)=>a+b,0);return ` ${c.label}: ${fmtNum(c.parsed)} (${(c.parsed/t*100).toFixed(1)}%)`;}}}}}});
+}
+function renderOrdChannel(){
+  const g=groupSum(ordFilteredRows(),'channel','qty');
+  const labels=Object.keys(g).sort((a,b)=>g[b]-g[a]);
+  mk('o-ch-channel',{type:'bar',data:{labels,datasets:[{label:'판매수량',data:labels.map(l=>g[l]),backgroundColor:'#4FBFB8',borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,onClick:(e,el)=>{if(el.length)setOrdDrill('channel',labels[el[0].index]);},
+      plugins:{legend:{display:false},tooltip:tip},scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{grid:{color:GRID}}}}});
+}
+function renderOrdType(){
+  const g=groupSum(ordFilteredRows(),'type','qty');
+  const labels=Object.keys(g).sort((a,b)=>g[b]-g[a]);
+  mk('o-ch-type',{type:'doughnut',data:{labels,datasets:[{data:labels.map(l=>g[l]),backgroundColor:['#3A5CD0','#FFB84F','#FF4D6D','#4FBFB8'],borderColor:'#141418',borderWidth:2,hoverOffset:6}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'62%',onClick:(e,el)=>{if(el.length)setOrdDrill('type',labels[el[0].index]);},
+      plugins:{legend:{position:'bottom',labels:{boxWidth:10,boxHeight:10,padding:8}},tooltip:tip}}});
+}
+function renderOrdTop(){
+  const g=groupSum(ordFilteredRows(),'code','qty');
+  const labels=Object.keys(g).sort((a,b)=>g[b]-g[a]).slice(0,10);
+  mk('o-ch-top',{type:'bar',data:{labels,datasets:[{label:'판매수량',data:labels.map(l=>g[l]),backgroundColor:'#3A5CD0',borderRadius:4}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,onClick:(e,el)=>{if(el.length)setOrdDrill('code',labels[el[0].index]);},
+      plugins:{legend:{display:false},tooltip:tip},scales:{x:{grid:{color:GRID}},y:{grid:{display:false},ticks:{font:{size:10}}}}}});
+}
+
+const ODRILL_LABEL={category:'카테고리',channel:'판매처',type:'출고유형',code:'상품코드'};
+function setOrdDrill(field,value){
+  state.ordDrill={field,value};
+  document.getElementById('o-drill').classList.add('on');
+  document.getElementById('o-drillTxt').textContent=`${ODRILL_LABEL[field]} = ${value}`;
+  renderOrdTable();
+  document.getElementById('o-table').scrollIntoView({behavior:'smooth',block:'center'});
+}
+function clearOrdDrill(){ state.ordDrill=null; document.getElementById('o-drill').classList.remove('on'); renderOrdTable(); }
+document.getElementById('o-drillX').addEventListener('click',clearOrdDrill);
+
+const OTCOLS=[
+  {k:'date',t:'날짜'},{k:'code',t:'상품코드'},{k:'category',t:'카테고리'},{k:'model',t:'모델명'},
+  {k:'channel',t:'판매처'},{k:'type',t:'출고유형'},{k:'size',t:'사이즈',num:1},{k:'gender',t:'성별'},{k:'qty',t:'수량',num:1},
+];
+function ordTableRows(){
+  let rows=ordFilteredRows();
+  if(state.ordDrill) rows=rows.filter(r=>r[state.ordDrill.field]===state.ordDrill.value);
+  const q=state.ordSearch.trim().toLowerCase();
+  if(q) rows=rows.filter(r=>[r.code,r.model,r.channel,r.category].some(v=>String(v).toLowerCase().includes(q)));
+  const {col,dir}=state.ordSort;
+  rows=rows.slice().sort((a,b)=>{let x=a[col],y=b[col];
+    if(col==='date'){x=x?x.getTime():0;y=y?y.getTime():0;}
+    if(typeof x==='number'&&typeof y==='number') return (x-y)*dir;
+    return String(x).localeCompare(String(y),'ko')*dir;});
+  return rows;
+}
+function renderOrdTable(){
+  const head=document.getElementById('o-theadRow');
+  head.innerHTML=OTCOLS.map(c=>{const act=state.ordSort.col===c.k; const ar=act?(state.ordSort.dir>0?'▲':'▼'):'⇅';
+    return `<th data-col="${c.k}" class="${c.num?'num':''}">${c.t}<span class="ar">${ar}</span></th>`;}).join('');
+  head.querySelectorAll('th').forEach(th=>th.onclick=()=>{
+    const c=th.dataset.col; if(state.ordSort.col===c) state.ordSort.dir*=-1; else {state.ordSort.col=c;state.ordSort.dir=1;}
+    renderOrdTable();});
+  const rows=ordTableRows(); const MAX=300;
+  document.getElementById('o-tbody').innerHTML = rows.slice(0,MAX).map(r=>`<tr>
+    <td>${fmtDate(r.date)}</td><td>${r.code}</td><td>${r.category}</td><td>${r.model}</td>
+    <td>${r.channel}</td><td>${r.type}</td><td class="num">${r.size}</td><td>${r.gender}</td>
+    <td class="num">${fmtNum(r.qty)}</td></tr>`).join('')
+    || `<tr><td colspan="${OTCOLS.length}" style="text-align:center;padding:30px;color:var(--text-tertiary)">조건에 맞는 데이터가 없습니다.</td></tr>`;
+  document.getElementById('o-rowCount').textContent = `${fmtNum(rows.length)}건`+(rows.length>MAX?` (상위 ${MAX}건 표시)`:'');
+}
+
+['ym','category','channel','type','gender'].forEach(k=>{
+  document.getElementById('o-'+k).addEventListener('change',e=>{state.ordFilters[k]=e.target.value;clearOrdDrillSilent();renderOrd();});
+});
+function clearOrdDrillSilent(){state.ordDrill=null;document.getElementById('o-drill').classList.remove('on');}
+document.getElementById('o-resetBtn').addEventListener('click',()=>{
+  state.ordFilters={ym:'ALL',category:'ALL',channel:'ALL',type:'ALL',gender:'ALL'};
+  state.ordSearch=''; document.getElementById('o-searchBox').value='';
+  buildOrdFilters(); clearOrdDrillSilent(); renderOrd();});
+document.getElementById('o-searchBox').addEventListener('input',e=>{state.ordSearch=e.target.value;renderOrdTable();});
+
+/* ════════════════════════════════════════════════════════
+   탭 전환 / 파일 입력 / 부팅
+════════════════════════════════════════════════════════ */
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('on'));
+    btn.classList.add('active');
+    document.getElementById('view-'+btn.dataset.tab).classList.add('on');
+  });
+});
+
+document.getElementById('fileBtn').addEventListener('click',()=>document.getElementById('fileInput').click());
+document.getElementById('fileInput').addEventListener('change',e=>{if(e.target.files[0])loadFile(e.target.files[0]);});
+const dz=document.getElementById('dropzone');
+if(dz){
+  dz.addEventListener('click',()=>document.getElementById('fileInput').click());
+  ['dragover','dragenter'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag');}));
+  ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag');}));
+  dz.addEventListener('drop',e=>{if(e.dataTransfer.files[0])loadFile(e.dataTransfer.files[0]);});
+}
+
+if(isHttp){
+  fetchData(true);
+  state.refreshTimer=setInterval(()=>fetchData(false),REFRESH_MS);
+}else{
+  showError('이 파일은 <b>file://</b> 로 열렸습니다. 보안상 자동 로드가 불가하니<br><b>data.xlsx</b> 파일을 직접 선택하거나 아래로 드래그&amp;드롭해 주세요.');
+  setLive(false,'파일 모드 — 수동 불러오기');
+}
+</script>
+</body>
+</html>
