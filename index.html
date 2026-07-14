@@ -194,7 +194,8 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
       <section class="section card">
         <div class="table-head">
           <h3>재고 상세 (발주필요 우선 정렬)</h3>
-          <div class="search"><span class="ic">🔍</span><input type="text" id="i-searchBox" placeholder="상품코드, 상품명, 모델명 검색…" /></div>
+          <div class="search"><span class="ic">🔍</span><input type="text" id="i-searchBox" placeholder="여러 단어 검색 가능 (예: BJM931 안전화) — 모두 만족하는 행만 표시" /></div>
+          <button class="btn-file" id="i-exportBtn">엑셀로 내보내기</button>
           <span class="row-count" id="i-rowCount"></span>
         </div>
         <div class="tbl-scroll">
@@ -455,7 +456,13 @@ const ITCOLS=[
 function invTableRows(){
   let rows=invFilteredRows();
   const q=state.invSearch.trim().toLowerCase();
-  if(q) rows=rows.filter(r=>[r.code,r.name,r.model].some(v=>String(v).toLowerCase().includes(q)));
+  if(q){
+    const tokens=q.split(/[,\s]+/).filter(t=>t);
+    rows=rows.filter(r=>{
+      const fields=[r.code,r.name,r.model,r.brand,r.category,r.gender].map(v=>String(v).toLowerCase());
+      return tokens.every(t=>fields.some(f=>f.includes(t)));
+    });
+  }
   const {col,dir}=state.invSort;
   rows=rows.slice().sort((a,b)=>{let x=a[col],y=b[col];
     if(typeof x==='boolean') { x=x?1:0; y=y?1:0; }
@@ -489,6 +496,17 @@ document.getElementById('i-resetBtn').addEventListener('click',()=>{
   state.invFilters={brand:'ALL',category:'ALL',gender:'ALL',onlyNeed:false}; state.invSearch=''; document.getElementById('i-searchBox').value='';
   buildInvFilters(); renderInv();});
 document.getElementById('i-searchBox').addEventListener('input',e=>{state.invSearch=e.target.value;renderInvTable();});
+document.getElementById('i-exportBtn').addEventListener('click',()=>{
+  const rows=invTableRows();
+  const header=ITCOLS.map(c=>c.t);
+  const data=rows.map(r=>ITCOLS.map(c=> c.k==='needOrder' ? (r.needOrder?'발주필요':'정상') : r[c.k]));
+  const ws=XLSX.utils.aoa_to_sheet([header,...data]);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'재고상세');
+  const now=new Date();
+  const ymd=now.getFullYear()+String(now.getMonth()+1).padStart(2,'0')+String(now.getDate()).padStart(2,'0');
+  XLSX.writeFile(wb, `재고상세_${ymd}.xlsx`);
+});
 
 /* ════════════════════════════════════════════════════════
    ② 주문 분석
