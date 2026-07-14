@@ -116,6 +116,19 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
 
 @media(max-width:1100px){.kpi-row{grid-template-columns:repeat(3,1fr);} .grid-2{grid-template-columns:1fr;} .grid-3{grid-template-columns:1fr;}}
 @media(max-width:680px){.kpi-row{grid-template-columns:repeat(2,1fr);} .title h1{font-size:17px;}}
+
+@media print{
+  body{background:#fff !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; color:#111 !important;}
+  .wrap{max-width:none;}
+  .btn-file,#fileInput,.live,.tabs,.reset,.search .ic{display:none !important;}
+  .period{border:1px solid #888 !important; color:#111 !important;}
+  .card,.kpi,.filters{border:1.2px solid #555 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; break-inside:avoid;}
+  .kpi::before{background:#3A5CD0 !important;}
+  table{border:1px solid #555 !important;}
+  thead th{background:#eee !important; color:#111 !important; border-bottom:1.2px solid #555 !important;}
+  tbody td{color:#111 !important; border-bottom:1px solid #999 !important;}
+  .tbl-scroll{max-height:none !important; overflow:visible !important; border:1.2px solid #555 !important;}
+}
 </style>
 </head>
 <body>
@@ -158,6 +171,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
     <!-- ══════════════════ 재고/발주 현황 ══════════════════ -->
     <div class="view on" id="view-inv">
       <section class="filters" id="filters-inv">
+        <div class="fl"><label>브랜드</label><select id="i-brand"></select></div>
         <div class="fl"><label>카테고리</label><select id="i-category"></select></div>
         <div class="fl"><label>성별</label><select id="i-gender"></select></div>
         <div class="chk"><input type="checkbox" id="i-onlyNeed" /><label for="i-onlyNeed">발주필요만 보기</label></div>
@@ -193,7 +207,9 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
     <div class="view" id="view-ord">
       <section class="filters" id="filters-ord">
         <div class="fl"><label>연월</label><select id="o-ym"></select></div>
+        <div class="fl"><label>브랜드</label><select id="o-brand"></select></div>
         <div class="fl"><label>카테고리</label><select id="o-category"></select></div>
+        <div class="fl"><label>모델명</label><select id="o-model"></select></div>
         <div class="fl"><label>판매처</label><select id="o-channel"></select></div>
         <div class="fl"><label>출고유형</label><select id="o-type"></select></div>
         <div class="fl"><label>성별</label><select id="o-gender"></select></div>
@@ -231,7 +247,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
         <div class="drill" id="o-drill"><span>드릴다운: <b id="o-drillTxt"></b></span><span class="x" id="o-drillX">×</span></div>
         <div class="table-head">
           <h3>상세 주문 내역</h3>
-          <div class="search"><span class="ic">🔍</span><input type="text" id="o-searchBox" placeholder="상품코드, 모델명, 판매처 검색…" /></div>
+          <div class="search"><span class="ic">🔍</span><input type="text" id="o-searchBox" placeholder="여러 단어 검색 가능 (예: BJM931 일반 / BJM931,일반) — 모두 만족하는 행만 표시" /></div>
           <span class="row-count" id="o-rowCount"></span>
         </div>
         <div class="tbl-scroll">
@@ -254,8 +270,8 @@ const SHEET_ORD = '주문로그';
 
 const state = {
   inv:[], ord:[],
-  invFilters:{category:'ALL',gender:'ALL',onlyNeed:false}, invSearch:'', invSort:{col:'needOrder',dir:-1},
-  ordFilters:{ym:'ALL',category:'ALL',channel:'ALL',type:'ALL',gender:'ALL'}, ordSearch:'', ordSort:{col:'date',dir:-1}, ordDrill:null,
+  invFilters:{brand:'ALL',category:'ALL',gender:'ALL',onlyNeed:false}, invSearch:'', invSort:{col:'needOrder',dir:-1},
+  ordFilters:{ym:'ALL',brand:'ALL',category:'ALL',model:'ALL',channel:'ALL',type:'ALL',gender:'ALL'}, ordSearch:'', ordSort:{col:'date',dir:-1}, ordDrill:null,
   charts:{}, refreshTimer:null,
 };
 
@@ -330,7 +346,7 @@ function parseWorkbook(buf){
 
   state.inv = (rawInv||[]).map(r=>({
     code:r['상품코드']||'', name:r['상품명']||'', category:r['카테고리']||'', model:r['모델명']||'',
-    gender:r['성별']||'', size:r['사이즈']||'', stock:toNum(r['현재고']), safeStock:toNum(r['안전재고']),
+    brand:r['브랜드']||'', gender:r['성별']||'', size:r['사이즈']||'', stock:toNum(r['현재고']), safeStock:toNum(r['안전재고']),
     baseStock:toNum(r['적용기준재고']), shortage:toNum(r['부족수량']),
     needOrder: String(r['발주필요']||'')==='발주필요',
     cumQty:toNum(r['누적판매수량']), expQty:toNum(r['체험단판매수량']),
@@ -339,8 +355,8 @@ function parseWorkbook(buf){
 
   state.ord = (rawOrd||[]).map(r=>{
     const d = parseDate(r['날짜']);
-    return { date:d, ym: d? d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'):'',
-      code:r['상품코드']||'', category:r['카테고리']||'', model:r['모델명']||'',
+    return { date:d, dateStr: d?fmtDate(d):'', ym: d? d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'):'',
+      code:r['상품코드']||'', category:r['카테고리']||'', model:r['모델명']||'', brand:r['브랜드']||'',
       channel:r['판매처']||'', type:r['출고유형']||'', size:r['사이즈']||'', gender:r['성별']||'',
       qty:toNum(r['수량']) };
   }).filter(r=>r.date);
@@ -383,6 +399,7 @@ function mk(id,cfg){ destroy(id); state.charts[id]=new Chart(document.getElement
    ① 재고 / 발주 현황
 ════════════════════════════════════════════════════════ */
 function buildInvFilters(){
+  fillSelect('i-brand',uniq(state.inv,'brand').sort(),state.invFilters.brand,'전체 브랜드');
   fillSelect('i-category',uniq(state.inv,'category').sort(),state.invFilters.category,'전체 카테고리');
   fillSelect('i-gender',uniq(state.inv,'gender').sort(),state.invFilters.gender,'전체 성별');
   document.getElementById('i-onlyNeed').checked = state.invFilters.onlyNeed;
@@ -390,6 +407,7 @@ function buildInvFilters(){
 function invFilteredRows(){
   const f=state.invFilters;
   return state.inv.filter(r=>
+    (f.brand==='ALL'||r.brand===f.brand) &&
     (f.category==='ALL'||r.category===f.category) &&
     (f.gender==='ALL'||r.gender===f.gender) &&
     (!f.onlyNeed || r.needOrder));
@@ -429,7 +447,7 @@ function renderInvTop(){
       scales:{x:{grid:{color:GRID}},y:{grid:{display:false},ticks:{font:{size:10}}}}}});
 }
 const ITCOLS=[
-  {k:'needOrder',t:'발주'},{k:'code',t:'상품코드'},{k:'name',t:'상품명'},{k:'category',t:'카테고리'},
+  {k:'needOrder',t:'발주'},{k:'code',t:'상품코드'},{k:'name',t:'상품명'},{k:'brand',t:'브랜드'},{k:'category',t:'카테고리'},
   {k:'model',t:'모델명'},{k:'gender',t:'성별'},{k:'size',t:'사이즈',num:1},
   {k:'stock',t:'현재고',num:1},{k:'safeStock',t:'안전재고',num:1},{k:'shortage',t:'부족수량',num:1},
   {k:'last7',t:'최근7일',num:1},{k:'last2m',t:'2개월',num:1},{k:'cumQty',t:'누적판매',num:1},
@@ -455,7 +473,7 @@ function renderInvTable(){
   const rows=invTableRows(); const MAX=300;
   document.getElementById('i-tbody').innerHTML = rows.slice(0,MAX).map(r=>`<tr class="${r.needOrder?'need':''}">
     <td>${r.needOrder?'<span class="badge need">발주필요</span>':'<span class="badge ok">정상</span>'}</td>
-    <td>${r.code}</td><td>${r.name}</td><td>${r.category}</td><td>${r.model}</td><td>${r.gender}</td>
+    <td>${r.code}</td><td>${r.name}</td><td>${r.brand}</td><td>${r.category}</td><td>${r.model}</td><td>${r.gender}</td>
     <td class="num">${r.size}</td><td class="num">${fmtNum(r.stock)}</td><td class="num">${fmtNum(r.safeStock)}</td>
     <td class="num">${fmtNum(r.shortage)}</td><td class="num">${fmtNum(r.last7)}</td><td class="num">${fmtNum(r.last2m)}</td>
     <td class="num">${fmtNum(r.cumQty)}</td></tr>`).join('')
@@ -463,12 +481,12 @@ function renderInvTable(){
   document.getElementById('i-rowCount').textContent = `${fmtNum(rows.length)}건`+(rows.length>MAX?` (상위 ${MAX}건 표시)`:'');
 }
 
-['category','gender'].forEach(k=>{
+['brand','category','gender'].forEach(k=>{
   document.getElementById('i-'+k).addEventListener('change',e=>{state.invFilters[k]=e.target.value;renderInv();});
 });
 document.getElementById('i-onlyNeed').addEventListener('change',e=>{state.invFilters.onlyNeed=e.target.checked;renderInv();});
 document.getElementById('i-resetBtn').addEventListener('click',()=>{
-  state.invFilters={category:'ALL',gender:'ALL',onlyNeed:false}; state.invSearch=''; document.getElementById('i-searchBox').value='';
+  state.invFilters={brand:'ALL',category:'ALL',gender:'ALL',onlyNeed:false}; state.invSearch=''; document.getElementById('i-searchBox').value='';
   buildInvFilters(); renderInv();});
 document.getElementById('i-searchBox').addEventListener('input',e=>{state.invSearch=e.target.value;renderInvTable();});
 
@@ -478,7 +496,9 @@ document.getElementById('i-searchBox').addEventListener('input',e=>{state.invSea
 function buildOrdFilters(){
   const yms=[...new Set(state.ord.map(r=>r.ym))].sort().reverse();
   fillSelect('o-ym',yms,state.ordFilters.ym,'전체 기간');
+  fillSelect('o-brand',uniq(state.ord,'brand').sort(),state.ordFilters.brand,'전체 브랜드');
   fillSelect('o-category',uniq(state.ord,'category').sort(),state.ordFilters.category,'전체 카테고리');
+  fillSelect('o-model',uniq(state.ord,'model').sort(),state.ordFilters.model,'전체 모델명');
   fillSelect('o-channel',uniq(state.ord,'channel').sort(),state.ordFilters.channel,'전체 판매처');
   fillSelect('o-type',uniq(state.ord,'type').sort(),state.ordFilters.type,'전체 유형');
   fillSelect('o-gender',uniq(state.ord,'gender').sort(),state.ordFilters.gender,'전체 성별');
@@ -486,7 +506,8 @@ function buildOrdFilters(){
 function ordFilteredRows(){
   const f=state.ordFilters;
   return state.ord.filter(r=>
-    (f.ym==='ALL'||r.ym===f.ym) && (f.category==='ALL'||r.category===f.category) &&
+    (f.ym==='ALL'||r.ym===f.ym) && (f.brand==='ALL'||r.brand===f.brand) &&
+    (f.category==='ALL'||r.category===f.category) && (f.model==='ALL'||r.model===f.model) &&
     (f.channel==='ALL'||r.channel===f.channel) && (f.type==='ALL'||r.type===f.type) &&
     (f.gender==='ALL'||r.gender===f.gender));
 }
@@ -512,7 +533,9 @@ function renderOrdTrend(){
   const m={}; rows.forEach(r=>{const k=fmtDate(r.date); m[k]=(m[k]||0)+r.qty;});
   const labels=Object.keys(m).sort();
   mk('o-ch-trend',{type:'bar',data:{labels,datasets:[{label:'판매수량',data:labels.map(l=>m[l]),backgroundColor:'#3A5CD0',borderRadius:3}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:tip},
+    options:{responsive:true,maintainAspectRatio:false,
+      onClick:(e,el)=>{if(el.length)setOrdDrill('dateStr',labels[el[0].index]);},
+      plugins:{legend:{display:false},tooltip:tip},
       scales:{x:{grid:{display:false},ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:16}},y:{grid:{color:GRID}}}}});
 }
 function renderOrdCat(){
@@ -546,7 +569,7 @@ function renderOrdTop(){
       plugins:{legend:{display:false},tooltip:tip},scales:{x:{grid:{color:GRID}},y:{grid:{display:false},ticks:{font:{size:10}}}}}});
 }
 
-const ODRILL_LABEL={category:'카테고리',channel:'판매처',type:'출고유형',code:'상품코드'};
+const ODRILL_LABEL={category:'카테고리',channel:'판매처',type:'출고유형',code:'상품코드',dateStr:'날짜'};
 function setOrdDrill(field,value){
   state.ordDrill={field,value};
   document.getElementById('o-drill').classList.add('on');
@@ -558,14 +581,20 @@ function clearOrdDrill(){ state.ordDrill=null; document.getElementById('o-drill'
 document.getElementById('o-drillX').addEventListener('click',clearOrdDrill);
 
 const OTCOLS=[
-  {k:'date',t:'날짜'},{k:'code',t:'상품코드'},{k:'category',t:'카테고리'},{k:'model',t:'모델명'},
+  {k:'date',t:'날짜'},{k:'code',t:'상품코드'},{k:'brand',t:'브랜드'},{k:'category',t:'카테고리'},{k:'model',t:'모델명'},
   {k:'channel',t:'판매처'},{k:'type',t:'출고유형'},{k:'size',t:'사이즈',num:1},{k:'gender',t:'성별'},{k:'qty',t:'수량',num:1},
 ];
 function ordTableRows(){
   let rows=ordFilteredRows();
   if(state.ordDrill) rows=rows.filter(r=>r[state.ordDrill.field]===state.ordDrill.value);
   const q=state.ordSearch.trim().toLowerCase();
-  if(q) rows=rows.filter(r=>[r.code,r.model,r.channel,r.category].some(v=>String(v).toLowerCase().includes(q)));
+  if(q){
+    const tokens=q.split(/[,\s]+/).filter(t=>t);
+    rows=rows.filter(r=>{
+      const fields=[r.code,r.model,r.channel,r.category,r.brand,r.dateStr,r.type,r.gender].map(v=>String(v).toLowerCase());
+      return tokens.every(t=>fields.some(f=>f.includes(t)));
+    });
+  }
   const {col,dir}=state.ordSort;
   rows=rows.slice().sort((a,b)=>{let x=a[col],y=b[col];
     if(col==='date'){x=x?x.getTime():0;y=y?y.getTime():0;}
@@ -582,19 +611,19 @@ function renderOrdTable(){
     renderOrdTable();});
   const rows=ordTableRows(); const MAX=300;
   document.getElementById('o-tbody').innerHTML = rows.slice(0,MAX).map(r=>`<tr>
-    <td>${fmtDate(r.date)}</td><td>${r.code}</td><td>${r.category}</td><td>${r.model}</td>
+    <td>${fmtDate(r.date)}</td><td>${r.code}</td><td>${r.brand}</td><td>${r.category}</td><td>${r.model}</td>
     <td>${r.channel}</td><td>${r.type}</td><td class="num">${r.size}</td><td>${r.gender}</td>
     <td class="num">${fmtNum(r.qty)}</td></tr>`).join('')
     || `<tr><td colspan="${OTCOLS.length}" style="text-align:center;padding:30px;color:var(--text-tertiary)">조건에 맞는 데이터가 없습니다.</td></tr>`;
   document.getElementById('o-rowCount').textContent = `${fmtNum(rows.length)}건`+(rows.length>MAX?` (상위 ${MAX}건 표시)`:'');
 }
 
-['ym','category','channel','type','gender'].forEach(k=>{
+['ym','brand','category','model','channel','type','gender'].forEach(k=>{
   document.getElementById('o-'+k).addEventListener('change',e=>{state.ordFilters[k]=e.target.value;clearOrdDrillSilent();renderOrd();});
 });
 function clearOrdDrillSilent(){state.ordDrill=null;document.getElementById('o-drill').classList.remove('on');}
 document.getElementById('o-resetBtn').addEventListener('click',()=>{
-  state.ordFilters={ym:'ALL',category:'ALL',channel:'ALL',type:'ALL',gender:'ALL'};
+  state.ordFilters={ym:'ALL',brand:'ALL',category:'ALL',model:'ALL',channel:'ALL',type:'ALL',gender:'ALL'};
   state.ordSearch=''; document.getElementById('o-searchBox').value='';
   buildOrdFilters(); clearOrdDrillSilent(); renderOrd();});
 document.getElementById('o-searchBox').addEventListener('input',e=>{state.ordSearch=e.target.value;renderOrdTable();});
