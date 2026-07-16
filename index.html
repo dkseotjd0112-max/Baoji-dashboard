@@ -104,6 +104,15 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
 .badge.need{background:rgba(255,77,109,.16);color:var(--color-error-fg);}
 .badge.ok{background:rgba(45,192,122,.14);color:var(--color-success-fg);}
 
+.img-trigger{cursor:pointer;font-size:15px;opacity:.85;}
+.img-trigger:hover{opacity:1;}
+.img-popover{display:none;position:fixed;z-index:200;background:#16161c;border:1px solid var(--border-strong);
+  border-radius:10px;padding:8px;box-shadow:0 12px 32px rgba(0,0,0,.55);}
+.img-popover img{display:block;max-width:240px;max-height:240px;border-radius:6px;object-fit:contain;background:#0a0a0f;}
+.img-popover .broken-txt{display:none;color:var(--text-tertiary);font-size:12px;padding:30px 20px;text-align:center;max-width:200px;}
+.img-popover.broken img{display:none;}
+.img-popover.broken .broken-txt{display:block;}
+
 .status{display:none;text-align:center;padding:60px 20px;color:var(--text-secondary);}
 .status.on{display:block;}
 .status .big{font-size:17px;font-weight:600;color:#fff;margin-bottom:8px;}
@@ -260,6 +269,11 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
   </div><!-- /dash -->
 </div>
 
+<div id="imgPopover" class="img-popover">
+  <img id="imgPopoverImg" src="" alt="상품 이미지" />
+  <div class="broken-txt">이미지를 불러올 수 없습니다</div>
+</div>
+
 <script>
 /* ════════════════════════════════════════════════════════
    설정 - data.xlsx 안에 "재고현황"/"주문로그" 두 시트가 있어야 함
@@ -279,6 +293,7 @@ const state = {
 const toNum = v => { if(v==null||v==='')return 0; const n=parseFloat(String(v).replace(/,/g,'')); return isNaN(n)?0:n; };
 const fmtNum = v => Math.round(v).toLocaleString('en-US');
 const fmtDate = d => d ? d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0') : '';
+const escAttr = s => String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
 
 function parseDate(v){
   if(v==null||v==='') return null;
@@ -352,6 +367,7 @@ function parseWorkbook(buf){
     needOrder: String(r['발주필요']||'')==='발주필요',
     cumQty:toNum(r['누적판매수량']), expQty:toNum(r['체험단판매수량']),
     last7:toNum(r['최근7일판매']), last2m:toNum(r['2개월판매']),
+    img: r['이미지url']||'',
   }));
 
   state.ord = (rawOrd||[]).map(r=>{
@@ -395,6 +411,39 @@ const tip = { backgroundColor:'#16161c', borderColor:'rgba(255,255,255,.12)', bo
   titleColor:'#fff', bodyColor:'rgba(255,255,255,.85)', padding:10, cornerRadius:8, displayColors:true };
 function destroy(id){ if(state.charts[id]){state.charts[id].destroy();delete state.charts[id];} }
 function mk(id,cfg){ destroy(id); state.charts[id]=new Chart(document.getElementById(id),cfg); }
+
+/* ════════════════════════════════════════════════════════
+   이미지 미리보기 팝오버 (마우스오버 / 탭)
+════════════════════════════════════════════════════════ */
+function showImgPopover(triggerEl, url){
+  const pop = document.getElementById('imgPopover');
+  const img = document.getElementById('imgPopoverImg');
+  pop.classList.remove('broken');
+  img.onerror = () => pop.classList.add('broken');
+  img.src = url;
+  pop.style.display = 'block';
+  const rect = triggerEl.getBoundingClientRect();
+  const pw = pop.offsetWidth || 260, ph = pop.offsetHeight || 260;
+  let left = rect.right + 8, top = rect.top - 8;
+  if(left + pw > window.innerWidth - 8) left = rect.left - pw - 8;
+  if(left < 8) left = 8;
+  if(top + ph > window.innerHeight - 8) top = window.innerHeight - ph - 8;
+  if(top < 8) top = 8;
+  pop.style.left = left + 'px';
+  pop.style.top = top + 'px';
+}
+function hideImgPopover(){ document.getElementById('imgPopover').style.display = 'none'; }
+
+document.getElementById('i-tbody') && setupImgPopoverDelegation();
+function setupImgPopoverDelegation(){
+  const tbody = document.getElementById('i-tbody');
+  tbody.addEventListener('mouseover', e=>{ const t=e.target.closest('.img-trigger'); if(t) showImgPopover(t, t.dataset.img); });
+  tbody.addEventListener('mouseout', e=>{ const t=e.target.closest('.img-trigger'); if(t) hideImgPopover(); });
+  tbody.addEventListener('click', e=>{ const t=e.target.closest('.img-trigger'); if(t) showImgPopover(t, t.dataset.img); });
+}
+document.addEventListener('click', e=>{
+  if(!e.target.closest('.img-trigger') && !e.target.closest('#imgPopover')) hideImgPopover();
+});
 
 /* ════════════════════════════════════════════════════════
    ① 재고 / 발주 현황
@@ -448,6 +497,7 @@ function renderInvTop(){
       scales:{x:{grid:{color:GRID}},y:{grid:{display:false},ticks:{font:{size:10}}}}}});
 }
 const ITCOLS=[
+  {k:'img',t:'사진'},
   {k:'needOrder',t:'발주'},{k:'code',t:'상품코드'},{k:'name',t:'상품명'},{k:'brand',t:'브랜드'},{k:'category',t:'카테고리'},
   {k:'model',t:'모델명'},{k:'gender',t:'성별'},{k:'size',t:'사이즈',num:1},
   {k:'stock',t:'현재고',num:1},{k:'safeStock',t:'안전재고',num:1},{k:'shortage',t:'부족수량',num:1},
@@ -479,6 +529,7 @@ function renderInvTable(){
     renderInvTable();});
   const rows=invTableRows(); const MAX=300;
   document.getElementById('i-tbody').innerHTML = rows.slice(0,MAX).map(r=>`<tr class="${r.needOrder?'need':''}">
+    <td>${r.img?`<span class="img-trigger" data-img="${escAttr(r.img)}">🖼</span>`:''}</td>
     <td>${r.needOrder?'<span class="badge need">발주필요</span>':'<span class="badge ok">정상</span>'}</td>
     <td>${r.code}</td><td>${r.name}</td><td>${r.brand}</td><td>${r.category}</td><td>${r.model}</td><td>${r.gender}</td>
     <td class="num">${r.size}</td><td class="num">${fmtNum(r.stock)}</td><td class="num">${fmtNum(r.safeStock)}</td>
@@ -498,8 +549,8 @@ document.getElementById('i-resetBtn').addEventListener('click',()=>{
 document.getElementById('i-searchBox').addEventListener('input',e=>{state.invSearch=e.target.value;renderInvTable();});
 document.getElementById('i-exportBtn').addEventListener('click',()=>{
   const rows=invTableRows();
-  const header=ITCOLS.map(c=>c.t);
-  const data=rows.map(r=>ITCOLS.map(c=> c.k==='needOrder' ? (r.needOrder?'발주필요':'정상') : r[c.k]));
+  const header=ITCOLS.filter(c=>c.k!=='img').map(c=>c.t);
+  const data=rows.map(r=>ITCOLS.filter(c=>c.k!=='img').map(c=> c.k==='needOrder' ? (r.needOrder?'발주필요':'정상') : r[c.k]));
   const ws=XLSX.utils.aoa_to_sheet([header,...data]);
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'재고상세');
