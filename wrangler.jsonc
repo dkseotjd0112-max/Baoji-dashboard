@@ -1,0 +1,33 @@
+{
+  // 이 파일은 Cloudflare가 이 프로젝트를 어떻게 배포할지 알려주는 설정 파일입니다.
+  // 저장소(Git) 루트에 이 파일이 있어야 하며, 이미 "wrangler.toml" 또는
+  // "wrangler.jsonc" 파일이 저장소에 있다면(Cloudflare가 자동 이관하며 만들어준
+  // 파일일 수 있음) 이 파일 내용을 참고해서 합쳐주세요 - 통째로 덮어쓰면
+  // 기존 설정(이름 등)이 사라질 수 있습니다.
+
+  "name": "baoji-dashboard",
+  "main": "worker.js",
+  "compatibility_date": "2026-07-21",
+
+  // 정적 파일(index.html, data_admin.xlsx, data_general.xlsx, login.html 등)이
+  // 있는 폴더. 지금은 저장소 루트에 그대로 두는 걸 기준으로 "./" 로 설정했습니다.
+  // 만약 실제로는 하위 폴더(예: "dist", "public")에 정적 파일들이 있다면
+  // 그 폴더명으로 바꿔주세요.
+  "assets": {
+    "directory": "./",
+    "binding": "ASSETS"
+  },
+
+  // KV 네임스페이스 연결 (dashboard-users, 이미 Cloudflare에 생성되어 있음)
+  "kv_namespaces": [
+    {
+      "binding": "USERS",
+      "id": "4c1e38be052d4548b322e6354800782c"
+    }
+  ]
+
+  // 주의: SESSION_SECRET(세션 서명용 비밀키)은 이 파일에 적지 마세요.
+  // 이 파일은 Git에 커밋되는 파일이라 비밀값을 적으면 유출 위험이 있습니다.
+  // 대신 이 파일을 배포한 뒤 Cloudflare 대시보드 > 이 프로젝트 > Settings >
+  // Variables and Secrets 에서 SESSION_SECRET을 "Encrypt"로 추가하세요.
+}

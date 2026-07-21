@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>로그인 - 아이두젠 재고·판매 대시보드</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background: #F5F6F8; font-family: -apple-system, "Malgun Gothic", "Segoe UI", sans-serif;
+  }
+  .box {
+    background: #fff; border-radius: 12px; padding: 40px 36px; width: 320px;
+    box-shadow: 0 2px 16px rgba(0,0,0,.08);
+  }
+  h1 { font-size: 18px; margin: 0 0 24px; color: #111; text-align: center; }
+  label { font-size: 13px; color: #555; display: block; margin-bottom: 6px; }
+  input {
+    width: 100%; padding: 10px 12px; margin-bottom: 16px; border: 1px solid #ddd;
+    border-radius: 8px; font-size: 14px;
+  }
+  button {
+    width: 100%; padding: 11px; border: none; border-radius: 8px; background: #2C4BB8;
+    color: #fff; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  button:disabled { opacity: .6; cursor: default; }
+  #err {
+    color: #D42F52; font-size: 13px; margin: -8px 0 14px; min-height: 16px; text-align: center;
+  }
+</style>
+</head>
+<body>
+  <div class="box">
+    <h1>아이두젠 재고·판매 대시보드</h1>
+    <form id="loginForm">
+      <label for="username">아이디</label>
+      <input type="text" id="username" autocomplete="username" required>
+      <label for="password">비밀번호</label>
+      <input type="password" id="password" autocomplete="current-password" required>
+      <div id="err"></div>
+      <button type="submit" id="submitBtn">로그인</button>
+    </form>
+  </div>
+
+<script>
+const form = document.getElementById('loginForm');
+const errBox = document.getElementById('err');
+const btn = document.getElementById('submitBtn');
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  errBox.textContent = '';
+  btn.disabled = true;
+  btn.textContent = '확인 중...';
+
+  try {
+    const res = await fetch('/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: document.getElementById('username').value,
+        password: document.getElementById('password').value,
+      }),
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      window.location.href = '/';
+    } else {
+      errBox.textContent = data.message || '로그인에 실패했습니다.';
+    }
+  } catch (e) {
+    errBox.textContent = '로그인 중 오류가 발생했습니다. 다시 시도해주세요.';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '로그인';
+  }
+});
+</script>
+</body>
+</html>

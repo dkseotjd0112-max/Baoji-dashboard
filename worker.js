@@ -1,0 +1,124 @@
+// ============================================================
+// 바오지 대시보드 - 로그인 보호 Worker (2026-07-21)
+// ============================================================
+// [중요] 이 사이트는 원래 Cloudflare Pages로 배포했지만, Cloudflare가
+// 최근 Pages를 "Workers + 정적 자산(Assets)" 방식으로 통합/이관하면서
+// 실제 대시보드에서는 "Workers" 프로젝트로 보이는 상태로 바뀌어 있었습니다
+// (라이브로 화면을 보면서 확인함 - baoji-dashboard.****.workers.dev 로
+// 서빙되고 있고, "정적 자산만 있는 Worker"라 대시보드에서 바로 변수/바인딩을
+// 추가할 수 없는 상태였음). 그래서 처음에 만들어드렸던
+// functions/_middleware.js + functions/login.js + functions/logout.js
+// (Cloudflare Pages Functions 방식)는 이 프로젝트 구조에는 맞지 않아
+// 이 파일 하나로 합쳐서 다시 만들었습니다. 이 파일이 이제 "메인 Worker
+// 스크립트" 역할을 하고, 정적 파일(index.html, data_admin.xlsx 등)은
+// env.ASSETS 를 통해 이 스크립트가 필요할 때 직접 가져다 서빙합니다.
+//
+// 기존 functions/ 폴더는 이제 사용하지 않습니다(삭제해도 됨, 남겨둬도
+// wrangler.jsonc에서 참조하지 않으면 무시됩니다).
+
+import { pbkdf2Hash, createSession, verifySession, parseCookie } from './crypto.js';
+
+const SESSION_MAX_AGE_SEC = 60 * 60 * 24 * 30; // 30일
+
+export default {
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+
+    // 로그인 처리(POST)
+    if (url.pathname === '/login' && request.method === 'POST') {
+      return handleLogin(request, env);
+    }
+
+    // 로그아웃
+    if (url.pathname === '/logout') {
+      return handleLogout(url);
+    }
+
+    // 로그인 화면 자체는 인증 없이 통과(정적 파일 그대로 서빙)
+    if (url.pathname === '/login.html') {
+      return env.ASSETS.fetch(request);
+    }
+
+    // 실제 데이터 파일 이름으로의 직접 접근은 항상 차단
+    if (url.pathname === '/data_admin.xlsx' || url.pathname === '/data_general.xlsx') {
+      return new Response('Not Found', { status: 404 });
+    }
+
+    // ---- 여기부터는 로그인 여부를 반드시 확인 ----
+    const cookieHeader = request.headers.get('Cookie');
+    const token = parseCookie(cookieHeader, 'session');
+    const session = await verifySession(token, env.SESSION_SECRET);
+
+    if (!session) {
+      return Response.redirect(url.origin + '/login.html', 302);
+    }
+
+    // data.xlsx 요청이면 권한에 맞는 실제 파일로 내부적으로 바꿔서 서빙
+    if (url.pathname === '/data.xlsx') {
+      const target = new URL(request.url);
+      target.pathname = session.r === 'admin' ? '/data_admin.xlsx' : '/data_general.xlsx';
+      return env.ASSETS.fetch(new Request(target.toString(), request));
+    }
+
+    // 그 외 나머지(index.html 등)는 정적 자산 그대로 서빙
+    return env.ASSETS.fetch(request);
+  },
+};
+
+async function handleLogin(request, env) {
+  let body;
+  try {
+    body = await request.json();
+  } catch (e) {
+    return jsonError('요청 형식이 올바르지 않습니다.', 400);
+  }
+
+  const username = String(body.username || '').trim().toLowerCase();
+  const password = String(body.password || '');
+
+  if (!username || !password) {
+    return jsonError('아이디와 비밀번호를 입력하세요.', 400);
+  }
+
+  const raw = await env.USERS.get(username);
+  if (!raw) {
+    return jsonError('아이디 또는 비밀번호가 올바르지 않습니다.', 401);
+  }
+
+  let rec;
+  try {
+    rec = JSON.parse(raw);
+  } catch (e) {
+    return jsonError('사용자 설정 오류입니다. 관리자에게 문의하세요.', 500);
+  }
+
+  const computed = await pbkdf2Hash(password, rec.salt);
+  if (computed.hash !== rec.hash) {
+    return jsonError('아이디 또는 비밀번호가 올바르지 않습니다.', 401);
+  }
+
+  const exp = Math.floor(Date.now() / 1000) + SESSION_MAX_AGE_SEC;
+  const token = await createSession({ u: username, r: rec.role, exp }, env.SESSION_SECRET);
+
+  const headers = new Headers({ 'Content-Type': 'application/json' });
+  headers.append(
+    'Set-Cookie',
+    `session=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${SESSION_MAX_AGE_SEC}`
+  );
+
+  return new Response(JSON.stringify({ ok: true, role: rec.role }), { headers });
+}
+
+function handleLogout(url) {
+  const headers = new Headers();
+  headers.append('Set-Cookie', 'session=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0');
+  headers.append('Location', url.origin + '/login.html');
+  return new Response(null, { status: 302, headers });
+}
+
+function jsonError(message, status) {
+  return new Response(JSON.stringify({ ok: false, message }), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
