@@ -15,7 +15,12 @@
   // 그 폴더명으로 바꿔주세요.
   "assets": {
     "directory": "./",
-    "binding": "ASSETS"
+    "binding": "ASSETS",
+    // [중요] 이게 없으면 index.html처럼 이름이 일치하는 정적 파일은 Worker
+    // 스크립트(로그인 확인 로직)를 거치지 않고 그냥 바로 서빙되어 버립니다.
+    // (2026-07-21 실제로 로그인 화면 없이 대시보드가 바로 보이는 문제로 확인됨)
+    // 이 값을 true로 켜야 모든 요청이 반드시 worker.js를 먼저 거치게 됩니다.
+    "run_worker_first": true
   },
 
   // KV 네임스페이스 연결 (dashboard-users, 이미 Cloudflare에 생성되어 있음)
