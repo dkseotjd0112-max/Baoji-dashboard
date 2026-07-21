@@ -20,6 +20,25 @@ import { pbkdf2Hash, createSession, verifySession, parseCookie } from './crypto.
 
 const SESSION_MAX_AGE_SEC = 60 * 60 * 24 * 30; // 30일
 
+// [2026-07-21 변경] 세션 서명용 비밀키를 Cloudflare 대시보드의 "Variables and secrets"
+// (env.SESSION_SECRET)가 아니라, KV(dashboard-users)의 특수 키 "__session_secret__"에서
+// 읽어오도록 바꿨습니다.
+// 이유: GitHub에 새 커밋을 push할 때마다 Cloudflare의 Git 연동 빌드(npx wrangler deploy)가
+// 실행되는데, 이 과정에서 대시보드에 등록해둔 SESSION_SECRET이 알 수 없는 이유로 반복적으로
+// 초기화(삭제)되는 현상이 실제로 두 번 확인됐습니다(로그인 계정은 멀쩡한데 로그인만 안 되는
+// 증상으로 나타남). 반면 KV(dashboard-users)에 저장한 계정 정보는 코드를 아무리 재배포해도
+// 한 번도 지워진 적이 없었으므로, 같은 KV 저장소에 비밀키도 같이 넣어서 이 문제를 근본적으로
+// 피했습니다. 이제부터는 git push를 아무리 반복해도 로그인이 깨지지 않습니다.
+const SESSION_SECRET_KV_KEY = '__session_secret__';
+
+async function getSessionSecret(env) {
+  const secret = await env.USERS.get(SESSION_SECRET_KV_KEY);
+  if (!secret) {
+    throw new Error('SESSION_SECRET_NOT_SET_IN_KV');
+  }
+  return secret;
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -57,9 +76,19 @@ export default {
     }
 
     // ---- 여기부터는 로그인 여부를 반드시 확인 ----
+    let sessionSecret;
+    try {
+      sessionSecret = await getSessionSecret(env);
+    } catch (e) {
+      return new Response(
+        '서버 설정 오류: 세션 비밀키가 아직 설정되지 않았습니다. Cloudflare 대시보드의 dashboard-users(KV)에 "__session_secret__" 키를 추가해주세요.',
+        { status: 500 }
+      );
+    }
+
     const cookieHeader = request.headers.get('Cookie');
     const token = parseCookie(cookieHeader, 'session');
-    const session = await verifySession(token, env.SESSION_SECRET);
+    const session = await verifySession(token, sessionSecret);
 
     if (!session) {
       return Response.redirect(url.origin + '/login', 302);
@@ -92,6 +121,22 @@ async function handleLogin(request, env) {
     return jsonError('아이디와 비밀번호를 입력하세요.', 400);
   }
 
+  // "__session_secret__"는 세션 서명용 비밀키 저장 전용 키이므로, 혹시라도 같은 이름의
+  // 아이디로 로그인을 시도하는 경우를 대비해 항상 차단합니다.
+  if (username === SESSION_SECRET_KV_KEY) {
+    return jsonError('아이디 또는 비밀번호가 올바르지 않습니다.', 401);
+  }
+
+  let sessionSecret;
+  try {
+    sessionSecret = await getSessionSecret(env);
+  } catch (e) {
+    return jsonError(
+      '서버 설정 오류: 세션 비밀키가 아직 설정되지 않았습니다. 관리자에게 문의하세요.',
+      500
+    );
+  }
+
   const raw = await env.USERS.get(username);
   if (!raw) {
     return jsonError('아이디 또는 비밀번호가 올바르지 않습니다.', 401);
@@ -110,7 +155,7 @@ async function handleLogin(request, env) {
   }
 
   const exp = Math.floor(Date.now() / 1000) + SESSION_MAX_AGE_SEC;
-  const token = await createSession({ u: username, r: rec.role, exp }, env.SESSION_SECRET);
+  const token = await createSession({ u: username, r: rec.role, exp }, sessionSecret);
 
   const headers = new Headers({ 'Content-Type': 'application/json' });
   headers.append(

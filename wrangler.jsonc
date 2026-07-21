@@ -31,8 +31,10 @@
     }
   ]
 
-  // 주의: SESSION_SECRET(세션 서명용 비밀키)은 이 파일에 적지 마세요.
-  // 이 파일은 Git에 커밋되는 파일이라 비밀값을 적으면 유출 위험이 있습니다.
-  // 대신 이 파일을 배포한 뒤 Cloudflare 대시보드 > 이 프로젝트 > Settings >
-  // Variables and Secrets 에서 SESSION_SECRET을 "Encrypt"로 추가하세요.
+  // [2026-07-21 변경] 세션 서명용 비밀키는 더 이상 이 파일이나 Cloudflare의
+  // "Variables and Secrets"에 넣지 않습니다. git push할 때마다 그 값이 원인
+  // 모르게 반복적으로 초기화(삭제)되는 현상이 있었기 때문입니다. 대신 위
+  // dashboard-users KV(계정 저장소)에 "__session_secret__"이라는 키로
+  // 직접 저장합니다 - KV 값은 재배포해도 지워지지 않는 것이 이미 확인됐습니다.
+  // (worker.js 상단 주석 참고)
 }
