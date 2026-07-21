@@ -35,8 +35,20 @@ export default {
     }
 
     // 로그인 화면 자체는 인증 없이 통과(정적 파일 그대로 서빙)
-    if (url.pathname === '/login.html') {
-      return env.ASSETS.fetch(request);
+    // [중요] /login.html 이라는 "확장자 있는" 경로로 그대로 ASSETS.fetch()를
+    // 호출하면, Cloudflare 정적 자산의 기본 html_handling 규칙(auto-trailing-slash)
+    // 때문에 "이 파일은 확장자 없이 불러야 하는 게 정식 경로"라며 307로
+    // "/login"으로 리다이렉트해버립니다. 그런데 "/login"으로 다시 들어오면
+    // 아래 세션 체크 로직에서 "로그인 안 됨 -> /login.html로 리다이렉트"가
+    // 실행되어, /login.html <-> /login 사이를 영원히 왔다갔다하는 무한
+    // 리다이렉트가 발생합니다(2026-07-21 실제로 이 문제 발생 확인).
+    // 그래서 GET /login과 GET /login.html을 둘 다 여기서 받아서, 항상
+    // "확장자 없는" /login 경로로 ASSETS에 요청해야 리다이렉트 없이 200으로
+    // 바로 서빙됩니다.
+    if ((url.pathname === '/login' || url.pathname === '/login.html') && request.method === 'GET') {
+      const assetUrl = new URL(request.url);
+      assetUrl.pathname = '/login';
+      return env.ASSETS.fetch(new Request(assetUrl.toString(), request));
     }
 
     // 실제 데이터 파일 이름으로의 직접 접근은 항상 차단
@@ -50,7 +62,7 @@ export default {
     const session = await verifySession(token, env.SESSION_SECRET);
 
     if (!session) {
-      return Response.redirect(url.origin + '/login.html', 302);
+      return Response.redirect(url.origin + '/login', 302);
     }
 
     // data.xlsx 요청이면 권한에 맞는 실제 파일로 내부적으로 바꿔서 서빙
@@ -112,7 +124,7 @@ async function handleLogin(request, env) {
 function handleLogout(url) {
   const headers = new Headers();
   headers.append('Set-Cookie', 'session=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0');
-  headers.append('Location', url.origin + '/login.html');
+  headers.append('Location', url.origin + '/login');
   return new Response(null, { status: 302, headers });
 }
 
