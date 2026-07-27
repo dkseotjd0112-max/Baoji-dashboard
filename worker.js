@@ -48,7 +48,10 @@ async function getSessionSecret(env) {
 // 때마다 Variables/secrets 값이 알 수 없는 이유로 초기화되는 현상이 실제로 있었기
 // 때문에, 이미 재배포에도 지워지지 않는 것이 확인된 KV를 그대로 재사용합니다.
 const GEMINI_KEY_KV_KEY = '__gemini_api_key__';
-const GEMINI_MODEL = 'gemini-2.0-flash'; // 무료 등급 모델. 구글이 모델명을 바꾸면 여기만 수정
+// [2026-07-27 수정] gemini-2.0-flash는 2026-06-01부로 완전 종료(shutdown)된 모델이라
+// 호출하면 429(quota exceeded)로 응답이 옴 - 실제로는 모델이 없어진 것. Google 공식
+// deprecation 문서 기준 무료tier 권장 대체 모델인 gemini-3.5-flash로 교체함.
+const GEMINI_MODEL = 'gemini-3.5-flash'; // 구글이 모델명을 또 바꾸면 여기만 수정
 const AI_MAX_ROWS = 60;
 const AI_MAX_QUESTION_LEN = 300;
 
