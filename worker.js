@@ -39,6 +39,27 @@ async function getSessionSecret(env) {
   return secret;
 }
 
+// [2026-07-27 추가] 대시보드 내장 AI 질의응답 기능(/api/ask-ai)에 쓰는 Gemini API 키.
+// 처음엔 Cloudflare Pages Functions(functions/api/ask-ai.js) 방식으로 만들었지만, 이
+// 프로젝트는 실제로는 "정적 자산이 있는 Worker" 구조라 functions/ 폴더가 인식되지
+// 않습니다(위 2026-07-21 주석 참고). 그래서 이 파일(worker.js) 안으로 합쳤습니다.
+// 키 저장 위치도 SESSION_SECRET과 같은 이유로 Cloudflare "Variables and secrets"가
+// 아니라 KV(dashboard-users)에 "__gemini_api_key__" 라는 이름으로 저장합니다 - git push
+// 때마다 Variables/secrets 값이 알 수 없는 이유로 초기화되는 현상이 실제로 있었기
+// 때문에, 이미 재배포에도 지워지지 않는 것이 확인된 KV를 그대로 재사용합니다.
+const GEMINI_KEY_KV_KEY = '__gemini_api_key__';
+const GEMINI_MODEL = 'gemini-2.0-flash'; // 무료 등급 모델. 구글이 모델명을 바꾸면 여기만 수정
+const AI_MAX_ROWS = 60;
+const AI_MAX_QUESTION_LEN = 300;
+
+async function getGeminiKey(env) {
+  const key = await env.USERS.get(GEMINI_KEY_KV_KEY);
+  if (!key) {
+    throw new Error('GEMINI_KEY_NOT_SET_IN_KV');
+  }
+  return key;
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -99,6 +120,11 @@ export default {
       const target = new URL(request.url);
       target.pathname = session.r === 'admin' ? '/data_admin.xlsx' : '/data_general.xlsx';
       return env.ASSETS.fetch(new Request(target.toString(), request));
+    }
+
+    // 대시보드 내장 AI 질의응답(로그인한 사용자만 호출 가능 - 무료 쿼터 보호)
+    if (url.pathname === '/api/ask-ai' && request.method === 'POST') {
+      return handleAskAI(request, env);
     }
 
     // 그 외 나머지(index.html 등)는 정적 자산 그대로 서빙
@@ -175,6 +201,82 @@ function handleLogout(url) {
 
 function jsonError(message, status) {
   return new Response(JSON.stringify({ ok: false, message }), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+// [2026-07-27 추가] 대시보드 화면에 "현재 필터링된 데이터"만 넘겨서 그 안에서만
+// 답하게 하는 AI 질의 프록시. 원래 functions/api/ask-ai.js (Pages Functions)로
+// 만들었던 것을 이 Worker 구조에 맞게 그대로 옮긴 것 - 로직은 동일함.
+async function handleAskAI(request, env) {
+  let geminiKey;
+  try {
+    geminiKey = await getGeminiKey(env);
+  } catch (e) {
+    return aiJson(
+      { error: '서버에 Gemini API 키가 설정되어 있지 않습니다. KV(dashboard-users)에 "__gemini_api_key__" 키를 추가해주세요.' },
+      500
+    );
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return aiJson({ error: '요청 형식이 올바르지 않습니다.' }, 400);
+  }
+
+  const question = String(body.question || '').slice(0, AI_MAX_QUESTION_LEN).trim();
+  const rows = Array.isArray(body.rows) ? body.rows.slice(0, AI_MAX_ROWS) : [];
+  const contextLabel = String(body.context || '').slice(0, 60);
+
+  if (!question) return aiJson({ error: '질문을 입력해주세요.' }, 400);
+  if (rows.length === 0) return aiJson({ error: '분석할 데이터가 없습니다. 필터 조건을 확인해주세요.' }, 400);
+
+  const dataText = rows.map((r, i) => `${i + 1}. ${JSON.stringify(r)}`).join('\n');
+
+  const prompt =
+`당신은 캠핑용품/신발 브랜드의 재고관리 담당자를 돕는 어시스턴트입니다.
+아래 [데이터]는 대시보드 화면에 현재 필터링되어 보이는 내용입니다(${contextLabel}, 총 ${rows.length}건 - 화면에 더 있어도 최대 ${AI_MAX_ROWS}건까지만 전달됨).
+반드시 이 데이터에 있는 내용만 근거로 답하세요. 데이터에서 확인할 수 없는 내용은 추측하지 말고
+"주어진 데이터에서는 확인할 수 없습니다"라고 답하세요.
+숫자를 언급할 때는 데이터에 있는 값을 그대로 인용하세요.
+답변은 한국어로, 담당자가 바로 읽고 판단할 수 있도록 간결한 문장으로 작성하세요(불필요한 서론 없이 바로 핵심부터).
+
+[데이터]
+${dataText}
+
+[질문]
+${question}`;
+
+  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiKey}`;
+  let res;
+  try {
+    res = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.2, maxOutputTokens: 700 },
+      }),
+    });
+  } catch (e) {
+    return aiJson({ error: 'AI 서버 호출 중 네트워크 오류: ' + e.message }, 502);
+  }
+
+  if (!res.ok) {
+    const errText = await res.text();
+    return aiJson({ error: `AI 호출 실패 (${res.status}): ${errText.slice(0, 300)}` }, 502);
+  }
+
+  const data = await res.json();
+  const answer = data?.candidates?.[0]?.content?.parts?.[0]?.text || '응답을 받지 못했습니다.';
+  return aiJson({ answer });
+}
+
+function aiJson(obj, status = 200) {
+  return new Response(JSON.stringify(obj), {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
