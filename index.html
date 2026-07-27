@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>바오지 재고·판매 대시보드</title>
+<title>아이두젠 재고·판매 대시보드</title>
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
@@ -58,8 +58,16 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .filters select{appearance:none;background:rgba(17,17,17,.04) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238A8D99' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>") no-repeat right 10px center;
   border:1px solid var(--border-default);color:var(--text-primary);border-radius:var(--radius-md);padding:9px 30px 9px 12px;font:500 13px/1 'Pretendard',sans-serif;cursor:pointer;min-width:110px;}
 .filters select option{color:#111;background:#fff;}
+.period-quick{display:flex;gap:6px;flex-wrap:wrap;}
+.period-btn{font:600 11.5px/1 'Pretendard',sans-serif;border:1px solid var(--border-default);background:rgba(17,17,17,.03);
+  color:var(--text-secondary);border-radius:var(--radius-full);padding:9px 12px;cursor:pointer;white-space:nowrap;}
+.period-btn:hover{border-color:var(--border-strong);color:var(--text-primary);}
+.period-btn.active{background:var(--color-primary-500);color:#fff;border-color:var(--color-primary-500);}
+#o-customRange input[type="date"]{border:1px solid var(--border-default);color:var(--text-primary);border-radius:var(--radius-md);
+  padding:8px 10px;font:500 13px/1 'Pretendard',sans-serif;background:rgba(17,17,17,.04);}
 .filters .chk{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary);}
 .filters .reset{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;}
+.filters-break{flex-basis:100%;height:0;margin:0;}
 .btn-reset{font:600 12px/1 'Pretendard',sans-serif;border:1px solid var(--border-default);background:transparent;color:var(--text-secondary);
   border-radius:var(--radius-full);padding:9px 16px;cursor:pointer;}
 .btn-reset:hover{border-color:var(--border-strong);color:var(--text-primary);}
@@ -161,7 +169,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
 
   <header class="topbar">
     <div class="title">
-      <h1>바오지 재고·판매 대시보드</h1>
+      <h1>아이두젠 재고·판매 대시보드</h1>
       <div class="sub">Baoji Inventory &amp; Sales · 실시간 웹 대시보드</div>
     </div>
     <div class="spacer"></div>
@@ -238,7 +246,27 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
     <!-- ══════════════════ 주문 분석 ══════════════════ -->
     <div class="view" id="view-ord">
       <section class="filters" id="filters-ord">
-        <div class="fl"><label>연월</label><select id="o-ym"></select></div>
+        <div class="fl" style="min-width:300px;">
+          <label>기간</label>
+          <div class="period-quick" id="o-periodQuick">
+            <button type="button" class="period-btn" data-p="today">오늘</button>
+            <button type="button" class="period-btn" data-p="yesterday">어제</button>
+            <button type="button" class="period-btn" data-p="last7">최근 7일</button>
+            <button type="button" class="period-btn" data-p="last1m">최근 1개월</button>
+            <button type="button" class="period-btn" data-p="last3m">최근 3개월</button>
+            <button type="button" class="period-btn" data-p="all">전체</button>
+            <button type="button" class="period-btn" data-p="custom">직접입력</button>
+          </div>
+        </div>
+        <div class="fl" id="o-customRange" style="display:none;">
+          <label>직접 선택</label>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <input type="date" id="o-dateFrom" />
+            <span style="color:var(--text-tertiary);font-size:12px;">~</span>
+            <input type="date" id="o-dateTo" />
+          </div>
+        </div>
+        <div class="filters-break"></div>
         <div class="fl"><label>브랜드</label><select id="o-brand"></select></div>
         <div class="fl"><label>카테고리</label><select id="o-category"></select></div>
         <div class="fl"><label>모델명</label><select id="o-model"></select></div>
@@ -255,9 +283,9 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
 
       <section class="kpi-row" id="o-kpiRow"></section>
 
-      <section class="section card">
+      <section class="section card trend-card">
         <h3>일별 판매수량 추이</h3><p class="q">시간에 따른 출고량 흐름은?</p>
-        <div class="chart-box" style="height:300px;"><canvas id="o-ch-trend"></canvas></div>
+        <div class="chart-box" style="height:170px;"><canvas id="o-ch-trend"></canvas></div>
       </section>
 
       <section class="section grid-3">
@@ -318,7 +346,8 @@ const SHEET_ORD = '주문로그';
 const state = {
   inv:[], ord:[],
   invFilters:{brand:'ALL',category:'ALL',gender:'ALL',onlyNeed:false}, invSearch:'', invSort:{col:'needOrder',dir:-1},
-  ordFilters:{ym:'ALL',brand:'ALL',category:'ALL',model:'ALL',channel:'ALL',type:'ALL',gender:'ALL'}, ordSearch:'', ordSort:{col:'date',dir:-1}, ordDrills:[],
+  ordFilters:{brand:'ALL',category:'ALL',model:'ALL',channel:'ALL',type:'ALL',gender:'ALL'}, ordSearch:'', ordSort:{col:'date',dir:-1}, ordDrills:[],
+  ordPeriod:{preset:'last1m', from:'', to:''},
   charts:{}, refreshTimer:null,
 };
 
@@ -400,6 +429,7 @@ function parseWorkbook(buf){
     cumQty:toNum(r['누적판매수량']), expQty:toNum(r['체험단판매수량']),
     last7:toNum(r['최근7일판매']), last2m:toNum(r['2개월판매']),
     img: r['이미지url']||'', onOrder:toNum(r['발주수량']),
+    price:toNum(r['온라인판매가']), consumerPrice:toNum(r['소비자가격']),
   }));
   state.inv.forEach(it=>{
     const dailyRate = it.last7>0 ? it.last7/7 : (it.last2m>0 ? it.last2m/60 : 0);
@@ -580,7 +610,7 @@ function renderInvTop(){
 }
 const ITCOLS=[
   {k:'img',t:'사진'},
-  {k:'needOrder',t:'발주'},{k:'code',t:'상품코드'},{k:'name',t:'상품명'},{k:'brand',t:'브랜드'},{k:'category',t:'카테고리'},
+  {k:'needOrder',t:'발주'},{k:'code',t:'상품코드'},{k:'name',t:'상품명'},{k:'price',t:'판매가',num:1},{k:'brand',t:'브랜드'},{k:'category',t:'카테고리'},
   {k:'model',t:'모델명'},{k:'gender',t:'성별'},{k:'size',t:'사이즈',num:1},
   {k:'stock',t:'현재고',num:1},{k:'safeStock',t:'안전재고',num:1},{k:'shortage',t:'부족수량',num:1},
   {k:'onOrder',t:'입고예정',num:1},{k:'daysLeft',t:'예상소진(일)',num:1},
@@ -616,7 +646,7 @@ function renderInvTable(){
   document.getElementById('i-tbody').innerHTML = rows.slice(0,MAX).map(r=>`<tr class="${r.needOrder?'need':''}">
     <td>${r.img?`<span class="img-trigger" data-img="${escAttr(r.img)}">🖼</span>`:''}</td>
     <td>${r.needOrder?'<span class="badge need">발주필요</span>':'<span class="badge ok">정상</span>'}</td>
-    <td>${r.code}</td><td>${r.name}</td><td>${r.brand}</td><td>${r.category}</td><td>${r.model}</td><td>${r.gender}</td>
+    <td>${r.code}</td><td>${r.name}</td><td class="num">${r.price>0?fmtNum(r.price)+'원':'-'}</td><td>${r.brand}</td><td>${r.category}</td><td>${r.model}</td><td>${r.gender}</td>
     <td class="num">${r.size}</td><td class="num">${fmtNum(r.stock)}</td><td class="num">${fmtNum(r.safeStock)}</td>
     <td class="num">${fmtNum(r.shortage)}</td><td class="num">${r.onOrder>0?fmtNum(r.onOrder):'-'}</td>
     <td class="num"${r.daysLeft!=null&&r.daysLeft<=7?' style="color:var(--color-error-fg);font-weight:700;"':''}>${r.daysLeft==null?'-':fmtNum(r.daysLeft)+'일'}</td>
@@ -632,6 +662,7 @@ function renderInvTable(){
 document.getElementById('i-onlyNeed').addEventListener('change',e=>{state.invFilters.onlyNeed=e.target.checked;buildInvFilters();renderInv();});
 document.getElementById('i-resetBtn').addEventListener('click',()=>{
   state.invFilters={brand:'ALL',category:'ALL',gender:'ALL',onlyNeed:false}; state.invSearch=''; document.getElementById('i-searchBox').value='';
+  document.getElementById('i-favSelect').value='';
   buildInvFilters(); renderInv();});
 document.getElementById('i-searchBox').addEventListener('input',e=>{state.invSearch=e.target.value;renderInvTable();});
 setupFavControls('i',
@@ -653,10 +684,29 @@ document.getElementById('i-exportBtn').addEventListener('click',()=>{
 /* ════════════════════════════════════════════════════════
    ② 주문 분석
 ════════════════════════════════════════════════════════ */
+function computeOrdPeriodRange(){
+  const p=state.ordPeriod;
+  const today=new Date(); today.setHours(0,0,0,0);
+  const endOfToday=new Date(today); endOfToday.setHours(23,59,59,999);
+  switch(p.preset){
+    case 'today': return [today, endOfToday];
+    case 'yesterday': { const s=new Date(today); s.setDate(s.getDate()-1); const e=new Date(s); e.setHours(23,59,59,999); return [s,e]; }
+    case 'last7': { const s=new Date(today); s.setDate(s.getDate()-6); return [s, endOfToday]; }
+    case 'last1m': { const s=new Date(today); s.setMonth(s.getMonth()-1); s.setDate(s.getDate()+1); return [s, endOfToday]; }
+    case 'last3m': { const s=new Date(today); s.setMonth(s.getMonth()-3); s.setDate(s.getDate()+1); return [s, endOfToday]; }
+    case 'custom': {
+      const f=p.from ? new Date(p.from+'T00:00:00') : null;
+      const t=p.to ? new Date(p.to+'T23:59:59') : null;
+      return [f,t];
+    }
+    default: return [null,null];
+  }
+}
 function ordRowsExcept(excludeKeys){
   const f=state.ordFilters;
+  const [pFrom,pTo]=computeOrdPeriodRange();
   return state.ord.filter(r=>
-    (excludeKeys.includes('ym')||f.ym==='ALL'||r.ym===f.ym) &&
+    (!pFrom||r.date>=pFrom) && (!pTo||r.date<=pTo) &&
     (excludeKeys.includes('brand')||f.brand==='ALL'||r.brand===f.brand) &&
     (excludeKeys.includes('category')||f.category==='ALL'||r.category===f.category) &&
     (excludeKeys.includes('model')||f.model==='ALL'||r.model===f.model) &&
@@ -665,19 +715,20 @@ function ordRowsExcept(excludeKeys){
     (excludeKeys.includes('gender')||f.gender==='ALL'||r.gender===f.gender));
 }
 function buildOrdFilters(){
-  const yms=[...new Set(ordRowsExcept(['ym']).map(r=>r.ym))].sort().reverse();
-  fillSelect('o-ym',yms,state.ordFilters.ym,'전체 기간');
   fillSelect('o-brand',uniq(ordRowsExcept(['brand']),'brand').sort(),state.ordFilters.brand,'전체 브랜드');
   fillSelect('o-category',uniq(ordRowsExcept(['category']),'category').sort(),state.ordFilters.category,'전체 카테고리');
   fillSelect('o-model',uniq(ordRowsExcept(['model']),'model').sort(),state.ordFilters.model,'전체 모델명');
   fillSelect('o-channel',uniq(ordRowsExcept(['channel']),'channel').sort(),state.ordFilters.channel,'전체 판매처');
   fillSelect('o-type',uniq(ordRowsExcept(['type']),'type').sort(),state.ordFilters.type,'전체 유형');
   fillSelect('o-gender',uniq(ordRowsExcept(['gender']),'gender').sort(),state.ordFilters.gender,'전체 성별');
+  renderPeriodButtons();
 }
 function ordFilteredRows(){
   const f=state.ordFilters;
+  const [pFrom,pTo]=computeOrdPeriodRange();
   return state.ord.filter(r=>
-    (f.ym==='ALL'||r.ym===f.ym) && (f.brand==='ALL'||r.brand===f.brand) &&
+    (!pFrom||r.date>=pFrom) && (!pTo||r.date<=pTo) &&
+    (f.brand==='ALL'||r.brand===f.brand) &&
     (f.category==='ALL'||r.category===f.category) && (f.model==='ALL'||r.model===f.model) &&
     (f.channel==='ALL'||r.channel===f.channel) && (f.type==='ALL'||r.type===f.type) &&
     (f.gender==='ALL'||r.gender===f.gender));
@@ -799,18 +850,50 @@ function renderOrdTable(){
   document.getElementById('o-rowCount').textContent = `${fmtNum(rows.length)}건`+(rows.length>MAX?` (상위 ${MAX}건 표시)`:'');
 }
 
-['ym','brand','category','model','channel','type','gender'].forEach(k=>{
+['brand','category','model','channel','type','gender'].forEach(k=>{
   document.getElementById('o-'+k).addEventListener('change',e=>{state.ordFilters[k]=e.target.value;clearOrdDrillSilent();buildOrdFilters();renderOrd();});
 });
 function clearOrdDrillSilent(){state.ordDrills=[];document.getElementById('o-drill').classList.remove('on');document.getElementById('o-drillChips').innerHTML='';}
+function renderPeriodButtons(){
+  document.querySelectorAll('#o-periodQuick .period-btn').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.p===state.ordPeriod.preset);
+  });
+  document.getElementById('o-customRange').style.display = state.ordPeriod.preset==='custom' ? 'flex' : 'none';
+}
+document.querySelectorAll('#o-periodQuick .period-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    state.ordPeriod.preset=btn.dataset.p;
+    if(btn.dataset.p!=='custom'){
+      state.ordPeriod.from=''; state.ordPeriod.to='';
+      document.getElementById('o-dateFrom').value=''; document.getElementById('o-dateTo').value='';
+    }
+    clearOrdDrillSilent(); buildOrdFilters(); renderOrd();
+  });
+});
+document.getElementById('o-dateFrom').addEventListener('change',e=>{
+  state.ordPeriod.preset='custom'; state.ordPeriod.from=e.target.value;
+  clearOrdDrillSilent(); buildOrdFilters(); renderOrd();
+});
+document.getElementById('o-dateTo').addEventListener('change',e=>{
+  state.ordPeriod.preset='custom'; state.ordPeriod.to=e.target.value;
+  clearOrdDrillSilent(); buildOrdFilters(); renderOrd();
+});
 document.getElementById('o-resetBtn').addEventListener('click',()=>{
-  state.ordFilters={ym:'ALL',brand:'ALL',category:'ALL',model:'ALL',channel:'ALL',type:'ALL',gender:'ALL'};
+  state.ordFilters={brand:'ALL',category:'ALL',model:'ALL',channel:'ALL',type:'ALL',gender:'ALL'};
+  state.ordPeriod={preset:'last1m',from:'',to:''};
+  document.getElementById('o-dateFrom').value=''; document.getElementById('o-dateTo').value='';
   state.ordSearch=''; document.getElementById('o-searchBox').value='';
+  document.getElementById('o-favSelect').value='';
   buildOrdFilters(); clearOrdDrillSilent(); renderOrd();});
 document.getElementById('o-searchBox').addEventListener('input',e=>{state.ordSearch=e.target.value;renderOrdTable();});
 setupFavControls('o',
-  ()=>({filters:{...state.ordFilters}, search:state.ordSearch}),
-  (saved)=>{ state.ordFilters={...saved.filters}; state.ordSearch=saved.search||''; document.getElementById('o-searchBox').value=state.ordSearch; clearOrdDrillSilent(); },
+  ()=>({filters:{...state.ordFilters}, search:state.ordSearch, period:{...state.ordPeriod}}),
+  (saved)=>{
+    state.ordFilters={...saved.filters}; state.ordSearch=saved.search||''; document.getElementById('o-searchBox').value=state.ordSearch;
+    state.ordPeriod = saved.period ? {...saved.period} : {preset:'last1m',from:'',to:''};
+    document.getElementById('o-dateFrom').value=state.ordPeriod.from||''; document.getElementById('o-dateTo').value=state.ordPeriod.to||'';
+    clearOrdDrillSilent();
+  },
   buildOrdFilters, renderOrd);
 document.getElementById('o-exportBtn').addEventListener('click',()=>{
   const rows=ordTableRows();
