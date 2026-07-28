@@ -552,13 +552,55 @@ function parseWorkbook(buf){
 }
 
 /* ════════════════════════════════════════════════════════
-   AI 질문하기 (Cloudflare Pages Function /api/ask-ai 프록시 호출)
-   - 지금 화면에 필터링된 데이터만 보내고, 세션당 호출 횟수를 제한해서
-     실수로 여러 번 눌러도 무료 할당량이 순식간에 소진되지 않도록 함.
+   AI 질문하기 (브라우저에서 Gemini 직접 호출)
+   - [2026-07-27 변경] 처음엔 Cloudflare Worker(/api/ask-ai)가 Gemini를 대신 호출해주는
+     완전 프록시 방식이었는데, Cloudflare Worker의 발신 IP가 Gemini 무료 API의
+     "User location is not supported"(400) 오류를 계속 유발함(한국에서 쓰는 것과 무관,
+     Cloudflare 인프라 자체 문제로 재현 확인됨). 그래서 이제는 이 브라우저(로그인한
+     사용자의 실제 한국 IP)가 Gemini를 직접 호출함 - Worker는 로그인 확인 후
+     /api/gemini-key로 키만 한 번 건네줌. 프롬프트 구성/행 개수 제한도 여기(클라이언트)로
+     옮겨왔음. 지금 화면에 필터링된 데이터만 보내고, 세션당 호출 횟수를 제한해서 실수로
+     여러 번 눌러도 무료 할당량이 순식간에 소진되지 않도록 함.
+   - 참고: 이 방식은 Gemini API 키가 로그인한 사용자의 브라우저 네트워크탭/페이지소스에
+     노출됨. 무료 등급 키라 과금 위험은 없고(초과 시 요청만 거부됨), 이미 로그인 게이트가
+     있어 외부인은 볼 수 없으므로 감수하기로 함.
 ════════════════════════════════════════════════════════ */
-const AI_ENDPOINT = '/api/ask-ai';
+const GEMINI_KEY_ENDPOINT = '/api/gemini-key';
+const GEMINI_MODEL = 'gemini-3.5-flash';
+const AI_MAX_ROWS = 60;
+const AI_MAX_QUESTION_LEN = 300;
 const AI_MAX_CALLS_PER_SESSION = 15;
 let aiCallCount = 0;
+let geminiKeyCache = null; // 페이지당 1번만 서버에서 받아와 재사용
+
+async function getGeminiKeyClient(){
+  if(geminiKeyCache) return geminiKeyCache;
+  const res = await fetch(GEMINI_KEY_ENDPOINT);
+  const data = await res.json();
+  if(!res.ok || data.error || !data.key){
+    throw new Error(data.error || `키를 가져오지 못했습니다 (HTTP ${res.status})`);
+  }
+  geminiKeyCache = data.key;
+  return geminiKeyCache;
+}
+
+function buildAIPrompt(question, rows, contextLabel){
+  const capped = rows.slice(0, AI_MAX_ROWS);
+  const q = String(question||'').slice(0, AI_MAX_QUESTION_LEN).trim();
+  const dataText = capped.map((r,i)=>`${i+1}. ${JSON.stringify(r)}`).join('\n');
+  return `당신은 캠핑용품/신발 브랜드의 재고관리 담당자를 돕는 어시스턴트입니다.
+아래 [데이터]는 대시보드 화면에 현재 필터링되어 보이는 내용입니다(${contextLabel}, 총 ${capped.length}건 - 화면에 더 있어도 최대 ${AI_MAX_ROWS}건까지만 전달됨).
+반드시 이 데이터에 있는 내용만 근거로 답하세요. 데이터에서 확인할 수 없는 내용은 추측하지 말고
+"주어진 데이터에서는 확인할 수 없습니다"라고 답하세요.
+숫자를 언급할 때는 데이터에 있는 값을 그대로 인용하세요.
+답변은 한국어로, 담당자가 바로 읽고 판단할 수 있도록 간결한 문장으로 작성하세요(불필요한 서론 없이 바로 핵심부터).
+
+[데이터]
+${dataText}
+
+[질문]
+${q}`;
+}
 
 async function askAI(question, rows, contextLabel, resultElId, btnEl){
   const resultEl = document.getElementById(resultElId);
@@ -577,18 +619,25 @@ async function askAI(question, rows, contextLabel, resultElId, btnEl){
   btnEl.disabled = true; const prevLabel = btnEl.textContent; btnEl.textContent='답변 생성 중…';
   resultEl.className='ai-result'; resultEl.textContent='';
   try{
-    const res = await fetch(AI_ENDPOINT, {
+    const key = await getGeminiKeyClient();
+    const prompt = buildAIPrompt(question, rows, contextLabel);
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`;
+    const res = await fetch(apiUrl, {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ question, rows, context: contextLabel })
+      body: JSON.stringify({
+        contents:[{ parts:[{ text: prompt }] }],
+        generationConfig:{ temperature:0.2, maxOutputTokens:700 }
+      })
     });
     const data = await res.json();
     if(!res.ok || data.error){
-      resultEl.className='ai-result err'; resultEl.textContent = data.error || ('오류 (HTTP '+res.status+')');
+      const msg = data?.error?.message || ('오류 (HTTP '+res.status+')');
+      resultEl.className='ai-result err'; resultEl.textContent = msg;
     } else {
-      resultEl.textContent = data.answer;
+      resultEl.textContent = data?.candidates?.[0]?.content?.parts?.[0]?.text || '응답을 받지 못했습니다.';
     }
   } catch(e){
-    resultEl.className='ai-result err'; resultEl.textContent = '호출 실패: '+e.message+' (아직 /api/ask-ai 기능이 배포되지 않았을 수 있습니다)';
+    resultEl.className='ai-result err'; resultEl.textContent = '호출 실패: '+e.message;
   } finally {
     btnEl.disabled = false; btnEl.textContent = prevLabel;
   }

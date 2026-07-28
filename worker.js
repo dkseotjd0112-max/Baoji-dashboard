@@ -39,7 +39,7 @@ async function getSessionSecret(env) {
   return secret;
 }
 
-// [2026-07-27 추가] 대시보드 내장 AI 질의응답 기능(/api/ask-ai)에 쓰는 Gemini API 키.
+// [2026-07-27 추가] 대시보드 내장 AI 질의응답 기능(/api/gemini-key)에 쓰는 Gemini API 키.
 // 처음엔 Cloudflare Pages Functions(functions/api/ask-ai.js) 방식으로 만들었지만, 이
 // 프로젝트는 실제로는 "정적 자산이 있는 Worker" 구조라 functions/ 폴더가 인식되지
 // 않습니다(위 2026-07-21 주석 참고). 그래서 이 파일(worker.js) 안으로 합쳤습니다.
@@ -47,13 +47,10 @@ async function getSessionSecret(env) {
 // 아니라 KV(dashboard-users)에 "__gemini_api_key__" 라는 이름으로 저장합니다 - git push
 // 때마다 Variables/secrets 값이 알 수 없는 이유로 초기화되는 현상이 실제로 있었기
 // 때문에, 이미 재배포에도 지워지지 않는 것이 확인된 KV를 그대로 재사용합니다.
+// [2026-07-27 추가 변경] 실제 Gemini 호출(모델명/프롬프트 구성/행 개수 제한 등)은 이제
+// 이 파일이 아니라 브라우저(기간검색 변경 버전.html)에서 처리함 - 이 Worker는 로그인
+// 확인 후 키 값만 건네주는 역할만 남음. 자세한 이유는 아래 /api/gemini-key 라우트 주석 참고.
 const GEMINI_KEY_KV_KEY = '__gemini_api_key__';
-// [2026-07-27 수정] gemini-2.0-flash는 2026-06-01부로 완전 종료(shutdown)된 모델이라
-// 호출하면 429(quota exceeded)로 응답이 옴 - 실제로는 모델이 없어진 것. Google 공식
-// deprecation 문서 기준 무료tier 권장 대체 모델인 gemini-3.5-flash로 교체함.
-const GEMINI_MODEL = 'gemini-3.5-flash'; // 구글이 모델명을 또 바꾸면 여기만 수정
-const AI_MAX_ROWS = 60;
-const AI_MAX_QUESTION_LEN = 300;
 
 async function getGeminiKey(env) {
   const key = await env.USERS.get(GEMINI_KEY_KV_KEY);
@@ -125,9 +122,18 @@ export default {
       return env.ASSETS.fetch(new Request(target.toString(), request));
     }
 
-    // 대시보드 내장 AI 질의응답(로그인한 사용자만 호출 가능 - 무료 쿼터 보호)
-    if (url.pathname === '/api/ask-ai' && request.method === 'POST') {
-      return handleAskAI(request, env);
+    // [2026-07-27 변경] 대시보드 내장 AI 질의응답: 처음엔 이 Worker가 Gemini를 대신
+    // 호출해주는 완전 프록시(/api/ask-ai, POST)로 만들었으나, Cloudflare Worker의
+    // 발신 IP가 Gemini 무료 API의 "위치 미지원"(400 FAILED_PRECONDITION) 오류를
+    // 계속 유발함(실제로 재현 확인 - 한국에서 쓰는 것과 무관, Cloudflare 인프라 자체
+    // 문제). 그래서 브라우저(사용자의 실제 한국 IP)가 Gemini를 직접 호출하는 방식으로
+    // 바꾸고, 이 Worker는 로그인 확인 후 키 값만 건네주는 역할만 함 - 그래서
+    // 데이터/프롬프트를 만드는 로직은 기간검색 변경 버전.html(클라이언트) 쪽으로 옮겼음.
+    // 키가 로그인한 브라우저의 페이지 소스/네트워크탭에 노출되긴 하지만, 이미 로그인
+    // 게이트가 있고 무료 등급 키라 과금 위험이 없어서(초과 시 그냥 요청이 막힐 뿐) 이
+    // 정도 노출은 감수하기로 함.
+    if (url.pathname === '/api/gemini-key' && request.method === 'GET') {
+      return handleGeminiKeyRequest(env);
     }
 
     // 그 외 나머지(index.html 등)는 정적 자산 그대로 서빙
@@ -209,73 +215,19 @@ function jsonError(message, status) {
   });
 }
 
-// [2026-07-27 추가] 대시보드 화면에 "현재 필터링된 데이터"만 넘겨서 그 안에서만
-// 답하게 하는 AI 질의 프록시. 원래 functions/api/ask-ai.js (Pages Functions)로
-// 만들었던 것을 이 Worker 구조에 맞게 그대로 옮긴 것 - 로직은 동일함.
-async function handleAskAI(request, env) {
-  let geminiKey;
+// [2026-07-27 변경] 로그인 확인이 끝난 뒤에만 도달하는 라우트이므로, 여기서는
+// KV에 저장된 Gemini 키를 그대로 꺼내서 돌려주기만 함 - 실제 Gemini 호출과 프롬프트
+// 구성은 브라우저(기간검색 변경 버전.html의 askAI())에서 함(이유는 위 라우팅 주석 참고).
+async function handleGeminiKeyRequest(env) {
   try {
-    geminiKey = await getGeminiKey(env);
+    const key = await getGeminiKey(env);
+    return aiJson({ key });
   } catch (e) {
     return aiJson(
       { error: '서버에 Gemini API 키가 설정되어 있지 않습니다. KV(dashboard-users)에 "__gemini_api_key__" 키를 추가해주세요.' },
       500
     );
   }
-
-  let body;
-  try {
-    body = await request.json();
-  } catch {
-    return aiJson({ error: '요청 형식이 올바르지 않습니다.' }, 400);
-  }
-
-  const question = String(body.question || '').slice(0, AI_MAX_QUESTION_LEN).trim();
-  const rows = Array.isArray(body.rows) ? body.rows.slice(0, AI_MAX_ROWS) : [];
-  const contextLabel = String(body.context || '').slice(0, 60);
-
-  if (!question) return aiJson({ error: '질문을 입력해주세요.' }, 400);
-  if (rows.length === 0) return aiJson({ error: '분석할 데이터가 없습니다. 필터 조건을 확인해주세요.' }, 400);
-
-  const dataText = rows.map((r, i) => `${i + 1}. ${JSON.stringify(r)}`).join('\n');
-
-  const prompt =
-`당신은 캠핑용품/신발 브랜드의 재고관리 담당자를 돕는 어시스턴트입니다.
-아래 [데이터]는 대시보드 화면에 현재 필터링되어 보이는 내용입니다(${contextLabel}, 총 ${rows.length}건 - 화면에 더 있어도 최대 ${AI_MAX_ROWS}건까지만 전달됨).
-반드시 이 데이터에 있는 내용만 근거로 답하세요. 데이터에서 확인할 수 없는 내용은 추측하지 말고
-"주어진 데이터에서는 확인할 수 없습니다"라고 답하세요.
-숫자를 언급할 때는 데이터에 있는 값을 그대로 인용하세요.
-답변은 한국어로, 담당자가 바로 읽고 판단할 수 있도록 간결한 문장으로 작성하세요(불필요한 서론 없이 바로 핵심부터).
-
-[데이터]
-${dataText}
-
-[질문]
-${question}`;
-
-  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiKey}`;
-  let res;
-  try {
-    res = await fetch(apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.2, maxOutputTokens: 700 },
-      }),
-    });
-  } catch (e) {
-    return aiJson({ error: 'AI 서버 호출 중 네트워크 오류: ' + e.message }, 502);
-  }
-
-  if (!res.ok) {
-    const errText = await res.text();
-    return aiJson({ error: `AI 호출 실패 (${res.status}): ${errText.slice(0, 300)}` }, 502);
-  }
-
-  const data = await res.json();
-  const answer = data?.candidates?.[0]?.content?.parts?.[0]?.text || '응답을 받지 못했습니다.';
-  return aiJson({ answer });
 }
 
 function aiJson(obj, status = 200) {
