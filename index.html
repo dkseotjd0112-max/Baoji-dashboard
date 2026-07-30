@@ -448,7 +448,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
 
       <section class="section card">
         <h3>겹침 경고</h3>
-        <p class="q">기간과 대상 품목/카테고리가 동시에 겹치는 프로모션 조합을 자동으로 찾아 표시합니다 (대상 품목/카테고리 표기가 서로 다르면 자동으로 못 잡을 수 있으니, 입력 시 카테고리명·모델명을 대시보드와 통일해주세요).</p>
+        <p class="q">기간이 겹치면서 프로모션상세에 등록된 실제 상품코드도 겹치는 조합을 자동으로 찾아 표시합니다 (프로모션상세에 상품코드를 등록해야 정확히 잡힙니다).</p>
         <div class="promo-warn-list" id="promo-warnList"></div>
       </section>
 
@@ -460,7 +460,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
         <p class="q">행을 클릭하면 "프로모션상세" 시트에 등록된 SKU 목록이 펼쳐집니다. 품목수·예상매출은 프로모션상세 시트(상품코드·수량)와 재고 마스터 데이터를 이용해 대시보드가 자동으로 계산한 값입니다.</p>
         <div class="promo-tbl-wrap tbl-scroll">
           <table id="promo-table"><thead><tr>
-            <th>No</th><th>프로모션명</th><th>시작일</th><th>종료일</th><th>대상채널</th><th>대상 품목/카테고리</th><th>품목수</th><th>예상매출</th><th>상태</th><th>비고</th>
+            <th>No</th><th>프로모션명</th><th>시작일</th><th>종료일</th><th>프로모션 채널</th><th>브랜드</th><th>품목수</th><th>예상매출</th><th>상태</th><th>비고</th>
           </tr></thead><tbody id="promo-tbody"></tbody></table>
         </div>
       </section>
@@ -1393,16 +1393,15 @@ function parseCsvText(text){
   return rows;
 }
 
-// "대상 품목/카테고리" 칸의 콤마/공백 구분 텍스트를 토큰 배열로 (겹침 비교용, 대소문자/공백 무시)
-function promoTokens(s){
-  return String(s||'').split(/[,\/\s]+/).map(t=>t.trim().toLowerCase()).filter(Boolean);
-}
 function promoDateOverlap(a,b){
   return a.start && a.end && b.start && b.end && a.start<=b.end && b.start<=a.end;
 }
+// [2026-07-30 수정] 예전엔 "대상 품목/카테고리" 자유입력 텍스트를 토큰화해서 비교했지만,
+// 이제 그 칸이 "브랜드"로 바뀌었고(항상 "바오지"라 겹침 판단에 의미가 없어짐) 프로모션상세
+// 탭에 실제 SKU별 상품코드가 들어오므로, 두 프로모션의 실제 상품코드 집합이 겹치는지로
+// 판단함 - 담당자가 표기를 통일해줄 필요 없이 항상 정확하게 자동으로 잡힘.
 function promoItemOverlap(a,b){
-  const set = new Set(a.itemTokens);
-  return b.itemTokens.filter(t=>set.has(t));
+  return [...a.codeSet].filter(code=>b.codeSet.has(code));
 }
 // 오늘 날짜 기준 예정/진행중/종료 계산 (시트의 상태(자동) 수식 값 대신 화면에서 직접 계산해서
 // 시간대·수식 오류 등의 영향 없이 하나의 기준으로만 판단함)
@@ -1414,8 +1413,8 @@ function promoStatus(r){
   return '진행중';
 }
 
-// "프로모션상세" 탭 CSV를 파싱해서 프로모션명별로 묶어줌(A프로모션번호는 사용자 내부관리용이라
-// 조인에는 안 쓰고, B프로모션명 텍스트를 프로모션일정 탭과 연결하는 키로 사용함).
+// "프로모션상세" 탭 CSV를 파싱해서 프로모션명별로 묶어줌(A담당자는 조인에는 안 쓰고,
+// B프로모션명 텍스트를 프로모션일정 탭과 연결하는 키로 사용함).
 function parsePromoDetailCsv(text){
   const csvRows = parseCsvText(text);
   let headerRowIdx=-1, header=null;
@@ -1492,9 +1491,18 @@ async function loadPromoSchedule(){
     const idxName    = header.findIndex(c=>c.trim()==='프로모션명');
     const idxStart   = header.findIndex(c=>c.trim()==='시작일');
     const idxEnd     = header.findIndex(c=>c.trim()==='종료일');
-    const idxChannel = header.findIndex(c=>c.trim()==='대상채널');
-    const idxItems   = header.findIndex(c=>c.trim()==='대상 품목/카테고리');
+    const idxChannel = header.findIndex(c=>c.trim()==='프로모션 채널');
+    const idxBrand   = header.findIndex(c=>c.trim()==='브랜드'); // [2026-07-30] "대상 품목/카테고리"에서 "브랜드"로 개편됨
     const idxNote    = header.findIndex(c=>c.trim()==='비고');
+
+    // 상품코드 -> 화면에 보여줄 이름 (겹침 경고에 상품코드 대신 품명을 보여주기 위함).
+    // 재고 마스터(state.invByCode)에 있으면 그 이름을, 없으면 프로모션상세에 직접 적힌 이름을 씀.
+    const codeToName = {};
+    Object.values(detailByName).forEach(list=>list.forEach(d=>{
+      if(!d.code) return;
+      const inv = state.invByCode[d.code];
+      codeToName[d.code] = (inv && inv.name) || d.nameRaw || d.code;
+    }));
 
     const rows = [];
     for(let i=headerRowIdx+1;i<csvRows.length;i++){
@@ -1502,7 +1510,7 @@ async function loadPromoSchedule(){
       if(!r || !r[idxName] || !r[idxName].trim()) continue; // 프로모션명 없는 빈 행은 건너뜀
       const start = idxStart>=0 ? parseDate((r[idxStart]||'').trim()) : null;
       const end   = idxEnd>=0   ? parseDate((r[idxEnd]||'').trim())   : null;
-      const itemsRaw = idxItems>=0 ? (r[idxItems]||'').trim() : '';
+      const brandRaw = idxBrand>=0 ? (r[idxBrand]||'').trim() : '';
       const name = r[idxName].trim();
       const details = detailByName[name] || [];
       // 품목수/예상매출은 시트에 직접 입력하지 않고, 프로모션상세(상품코드+수량)와 재고 마스터
@@ -1514,8 +1522,8 @@ async function loadPromoSchedule(){
         name,
         start, end,
         channel: idxChannel>=0 ? (r[idxChannel]||'').trim() : '',
-        itemsRaw,
-        itemTokens: promoTokens(itemsRaw),
+        brandRaw,
+        codeSet: new Set(details.map(d=>d.code).filter(Boolean)),
         note: idxNote>=0 ? (r[idxNote]||'').trim() : '',
         itemCount: details.length,
         revenue,
@@ -1523,7 +1531,8 @@ async function loadPromoSchedule(){
     }
     rows.forEach(r=>{ r.status = promoStatus(r); });
 
-    // 겹침 경고: 기간 + 대상품목 두 조건이 모두 겹치는 조합만 실제 충돌로 판단
+    // 겹침 경고: 기간이 겹치면서, 프로모션상세에 등록된 실제 상품코드도 겹치는 조합만 충돌로 판단
+    // (담당자가 입력한 텍스트가 아니라 실제 SKU 코드로 비교하므로 표기 차이로 인한 누락이 없음)
     const warnings = [];
     const overlapNames = new Set();
     for(let i=0;i<rows.length;i++){
@@ -1531,7 +1540,7 @@ async function loadPromoSchedule(){
         if(!promoDateOverlap(rows[i],rows[j])) continue;
         const common = promoItemOverlap(rows[i],rows[j]);
         if(common.length===0) continue;
-        warnings.push({ a:rows[i], b:rows[j], common });
+        warnings.push({ a:rows[i], b:rows[j], common: common.map(code=>codeToName[code]||code) });
         overlapNames.add(rows[i].name); overlapNames.add(rows[j].name);
       }
     }
@@ -1585,9 +1594,42 @@ function renderPromoGantt(){
   const labels = rows.map(r=>r.name);
   const data = rows.map(r=>[dayIdx(r.start), dayIdx(r.end)+1]); // 종료일도 하루로 포함되도록 +1
   const colors = rows.map(r=> state.promo.overlapNames.has(r.name) ? 'rgba(212,47,82,.75)' : 'rgba(44,75,184,.75)');
+
+  // [2026-07-30 추가] 막대 안에 프로모션 채널 텍스트를 그려 넣는 전용 플러그인.
+  // 막대 폭보다 텍스트가 길면(채널명이 길거나 기간이 짧으면) 겹쳐 보이지 않도록 생략함.
+  const channelLabelPlugin = {
+    id: 'promoChannelLabel',
+    afterDatasetsDraw(chart){
+      const meta = chart.getDatasetMeta(0);
+      if(!meta || !meta.data) return;
+      const ctx = chart.ctx;
+      ctx.save();
+      ctx.font = "11px 'Pretendard', sans-serif";
+      ctx.fillStyle = '#fff';
+      ctx.textBaseline = 'middle';
+      meta.data.forEach((bar, i)=>{
+        const label = rows[i] && rows[i].channel;
+        if(!label) return;
+        const left = Math.min(bar.x, bar.base) + 6;
+        const right = Math.max(bar.x, bar.base) - 6;
+        const width = right - left;
+        if(width < 20) return; // 막대가 너무 짧으면 아예 생략
+        let text = label;
+        if(ctx.measureText(text).width > width){
+          // 다 안 들어가면 줄여서 "…" 처리, 그래도 안 들어가면 생략
+          while(text.length>1 && ctx.measureText(text+'…').width>width) text = text.slice(0,-1);
+          text = text.length>1 ? text+'…' : '';
+        }
+        if(text) ctx.fillText(text, left, bar.y);
+      });
+      ctx.restore();
+    }
+  };
+
   mk('promo-ch-gantt', {
     type:'bar',
     data:{ labels, datasets:[{ data, backgroundColor:colors, borderRadius:3, barPercentage:0.6 }] },
+    plugins:[channelLabelPlugin],
     options:{
       indexAxis:'y', responsive:true, maintainAspectRatio:false,
       plugins:{ legend:{display:false}, tooltip:{ callbacks:{
@@ -1632,7 +1674,7 @@ function renderPromoTable(){
       '<td>'+fmtDate(r.start)+'</td>'+
       '<td>'+fmtDate(r.end)+'</td>'+
       '<td>'+escAttr(r.channel)+'</td>'+
-      '<td>'+escAttr(r.itemsRaw)+'</td>'+
+      '<td>'+escAttr(r.brandRaw)+'</td>'+
       '<td>'+(r.itemCount ? r.itemCount+'종' : '-')+'</td>'+
       '<td>'+(r.revenue ? fmtNum(r.revenue) : '-')+'</td>'+
       '<td><span class="badge '+statusClass(r.status)+'">'+escAttr(r.status)+'</span></td>'+
