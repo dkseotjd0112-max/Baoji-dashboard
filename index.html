@@ -147,6 +147,27 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
 .note-badges{display:flex;gap:4px;flex-wrap:wrap;}
 .hide-col{display:none;}
 
+/* [2026-07-29 추가] 프로모션 일정 (월간 달력) */
+.promo-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+.promo-nav-btn{font:700 13px/1 'Pretendard',sans-serif;border:1px solid var(--border-default);background:var(--bg-elevated);
+  color:var(--text-primary);border-radius:var(--radius-md);padding:8px 14px;cursor:pointer;}
+.promo-nav-btn:hover{border-color:var(--border-strong);}
+.promo-month-label{font:700 16px/1 'Pretendard',sans-serif;color:var(--text-primary);min-width:100px;text-align:center;}
+.promo-refresh{margin-left:auto;font:600 12px/1 'Pretendard',sans-serif;border:1px solid var(--border-default);background:transparent;
+  color:var(--text-secondary);border-radius:var(--radius-full);padding:8px 14px;cursor:pointer;}
+.promo-refresh:hover{border-color:var(--border-strong);color:var(--text-primary);}
+.promo-status{font-size:12px;color:var(--text-tertiary);margin-bottom:10px;min-height:16px;}
+.promo-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;}
+.promo-dow{font-size:11px;font-weight:700;color:var(--text-tertiary);text-align:center;padding:4px 0 8px;}
+.promo-day{min-height:92px;border:1px solid var(--border-default);border-radius:var(--radius-md);padding:6px 7px;background:var(--bg-elevated);}
+.promo-day.empty{background:transparent;border-color:transparent;}
+.promo-day.today{border-color:var(--color-primary-500);border-width:2px;padding:5px 6px;}
+.promo-day.has-note{border-color:var(--color-primary-300);}
+.promo-day .d-num{font-size:12px;font-weight:700;color:var(--text-primary);margin-bottom:4px;}
+.promo-day .d-spend{font-size:10px;color:var(--text-tertiary);margin-bottom:3px;}
+.promo-day .d-note{font-size:10.5px;color:var(--text-secondary);line-height:1.35;word-break:break-word;}
+.promo-empty-msg{font-size:13px;color:var(--text-tertiary);padding:20px 0;text-align:center;}
+
 .ai-box{background:var(--bg-elevated);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:18px;}
 .ai-box h3{margin:0 0 4px;font-size:15px;font-weight:700;}
 .ai-box .q{font-size:11px;color:var(--text-tertiary);margin:0 0 14px;}
@@ -244,6 +265,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
     <div class="tabs">
       <button class="tab-btn" data-tab="ord">주문 분석</button>
       <button class="tab-btn active" data-tab="inv">재고 / 발주 현황</button>
+      <button class="tab-btn" data-tab="promo">프로모션 일정</button>
     </div>
 
     <!-- ══════════════════ 재고/발주 현황 ══════════════════ -->
@@ -401,6 +423,22 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
       </section>
     </div>
 
+    <!-- ══════════════════ 프로모션 일정 ══════════════════ -->
+    <div class="view" id="view-promo">
+      <section class="section card">
+        <h3>프로모션 / 광고 일정 (월간 달력)</h3>
+        <p class="q">구글시트 "바오지_메타 요약" 탭의 일별 광고 기록을 달력으로 표시합니다. 각 날짜 칸의 문구는 "메타 구매 광고" 메모 원문 그대로입니다.</p>
+        <div class="promo-toolbar">
+          <button type="button" class="promo-nav-btn" id="promo-prevBtn">‹ 이전달</button>
+          <span class="promo-month-label" id="promo-monthLabel">-</span>
+          <button type="button" class="promo-nav-btn" id="promo-nextBtn">다음달 ›</button>
+          <button type="button" class="promo-refresh" id="promo-refreshBtn">새로고침</button>
+        </div>
+        <div class="promo-status" id="promo-status">불러오는 중…</div>
+        <div class="promo-cal" id="promo-cal"></div>
+      </section>
+    </div>
+
   </div><!-- /dash -->
 </div>
 
@@ -424,6 +462,7 @@ const state = {
   ordFilters:{brand:'ALL',category:'ALL',model:'ALL',channel:'ALL',type:'ALL',gender:'ALL'}, ordSearch:'', ordSort:{col:'date',dir:-1}, ordDrills:[],
   ordPeriod:{preset:'last1m', from:'', to:''}, ordMetric:'qty',
   charts:{}, refreshTimer:null, openMsel:null,
+  promo:{byDate:{}, cur:null, loaded:false},
 };
 
 const toNum = v => { if(v==null||v==='')return 0; const n=parseFloat(String(v).replace(/,/g,'')); return isNaN(n)?0:n; };
@@ -1288,6 +1327,157 @@ document.getElementById('o-aiAskBtn').addEventListener('click', ()=>{
 document.getElementById('o-aiInput').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('o-aiAskBtn').click(); });
 
 /* ════════════════════════════════════════════════════════
+   프로모션 일정 (월간 달력) - 구글시트 CSV(서버 프록시) 기반
+   [2026-07-29 추가] worker.js의 GET /api/promo-schedule 라우트가 구글시트
+   "바오지_메타 요약" 탭을 서버에서 대신 가져와 same-origin으로 돌려줌 -
+   브라우저가 docs.google.com을 직접 fetch하지 않으므로 CORS 걱정 없음.
+════════════════════════════════════════════════════════ */
+const PROMO_ENDPOINT = '/api/promo-schedule';
+
+// 따옴표로 감싼 필드(콤마 포함 숫자 등)를 정확히 처리하는 최소 CSV 파서
+function parseCsvText(text){
+  const rows=[]; let row=[]; let field=''; let inQ=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(inQ){
+      if(c==='"'){ if(text[i+1]==='"'){field+='"'; i++;} else inQ=false; }
+      else field+=c;
+    }else{
+      if(c==='"') inQ=true;
+      else if(c===','){ row.push(field); field=''; }
+      else if(c==='\n'){ row.push(field); rows.push(row); row=[]; field=''; }
+      else if(c==='\r'){ /* \n 처리에서 줄바꿈 완료되므로 무시 */ }
+      else field+=c;
+    }
+  }
+  if(field!==''||row.length){ row.push(field); rows.push(row); }
+  return rows;
+}
+
+// 시트의 "6월 18일" 같은 한글 월/일 표기 -> Date. 시트에 연도 표기가 없어서
+// 현재 연도로 가정함(해가 바뀌어도 12월→1월 롤오버 데이터가 쌓이면 이 부분에
+// 연도 판별 로직을 보강해야 함 - 지금은 단일 연도 범위만 사용 중이라 단순화함).
+function parseKoreanMD(s, yearHint){
+  const m = String(s).match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일/);
+  if(!m) return null;
+  const mo = parseInt(m[1],10), d = parseInt(m[2],10);
+  if(!mo||!d) return null;
+  return new Date(yearHint, mo-1, d);
+}
+
+async function loadPromoSchedule(){
+  const statusEl = document.getElementById('promo-status');
+  const calEl = document.getElementById('promo-cal');
+  if(statusEl) statusEl.textContent = '불러오는 중…';
+  try{
+    const res = await fetch(PROMO_ENDPOINT + '?t=' + Date.now());
+    const ct = res.headers.get('Content-Type')||'';
+    if(!res.ok){
+      let msg = 'HTTP '+res.status;
+      if(ct.includes('json')){ try{ const j=await res.json(); if(j&&j.message) msg=j.message; }catch(e){} }
+      throw new Error(msg);
+    }
+    const text = await res.text();
+    const rows = parseCsvText(text);
+
+    // 헤더행 찾기: 시트 상단에 빈 행/빈 열이 섞여있어 "날짜" 셀이 있는 행을 직접 탐색
+    let headerRowIdx=-1, header=null;
+    for(let i=0;i<rows.length;i++){
+      if(rows[i].some(c=>c.trim()==='날짜')){ headerRowIdx=i; header=rows[i]; break; }
+    }
+    if(headerRowIdx<0) throw new Error('시트에서 "날짜" 헤더를 찾지 못했습니다(시트 구조가 바뀐 것 같습니다).');
+
+    const idxDate  = header.findIndex(c=>c.trim()==='날짜');
+    const idxSpend = header.findIndex(c=>c.trim()==='지출 금액');
+    const idxTotal = header.findIndex(c=>c.trim()==='구매 총합');
+    const idxRatio = header.findIndex(c=>c.trim()==='매출 대비 광고비율');
+    const idxNote  = header.findIndex(c=>c.trim()==='메타 구매 광고');
+
+    const yearHint = new Date().getFullYear();
+    const byDate = {};
+    for(let i=headerRowIdx+1;i<rows.length;i++){
+      const r = rows[i];
+      if(!r || idxDate>=r.length) continue;
+      const dateRaw = (r[idxDate]||'').trim();
+      if(!dateRaw) continue;
+      const dt = parseKoreanMD(dateRaw, yearHint);
+      if(!dt) continue;
+      const key = fmtDate(dt);
+      byDate[key] = {
+        date: dt,
+        spend: toNum(r[idxSpend]),
+        total: idxTotal>=0 ? toNum(r[idxTotal]) : null,
+        ratio: idxRatio>=0 ? (r[idxRatio]||'').trim() : '',
+        note: idxNote>=0 ? (r[idxNote]||'').trim() : '',
+      };
+    }
+
+    state.promo.byDate = byDate;
+    state.promo.loaded = true;
+    if(!state.promo.cur){
+      // 데이터가 있는 가장 최근 달을 기본값으로 (데이터가 전혀 없으면 이번 달)
+      const keys = Object.keys(byDate).sort();
+      const lastDate = keys.length ? byDate[keys[keys.length-1]].date : new Date();
+      state.promo.cur = { y: lastDate.getFullYear(), m: lastDate.getMonth() };
+    }
+    if(statusEl) statusEl.textContent = '';
+    renderPromoCalendar();
+  }catch(err){
+    state.promo.loaded = false;
+    if(statusEl) statusEl.textContent = '불러오지 못했습니다: ' + err.message;
+    if(calEl) calEl.innerHTML = '';
+  }
+}
+
+function renderPromoCalendar(){
+  const calEl = document.getElementById('promo-cal');
+  const labelEl = document.getElementById('promo-monthLabel');
+  if(!calEl || !state.promo.cur) return;
+  const {y,m} = state.promo.cur;
+  if(labelEl) labelEl.textContent = y+'년 '+(m+1)+'월';
+
+  const dowNames = ['일','월','화','수','목','금','토'];
+  let html = dowNames.map(n=>'<div class="promo-dow">'+n+'</div>').join('');
+
+  const first = new Date(y,m,1);
+  const firstDow = first.getDay();
+  const daysInMonth = new Date(y,m+1,0).getDate();
+  const todayKey = fmtDate(new Date());
+
+  for(let i=0;i<firstDow;i++) html += '<div class="promo-day empty"></div>';
+  for(let d=1; d<=daysInMonth; d++){
+    const dt = new Date(y,m,d);
+    const key = fmtDate(dt);
+    const rec = state.promo.byDate[key];
+    const isToday = key===todayKey;
+    const hasNote = !!(rec && rec.note);
+    let inner = '<div class="d-num">'+d+'</div>';
+    if(rec){
+      if(rec.spend) inner += '<div class="d-spend">지출 '+fmtNum(rec.spend)+'</div>';
+      if(rec.note) inner += '<div class="d-note">'+escAttr(rec.note).replace(/\n/g,'<br>')+'</div>';
+    }
+    html += '<div class="promo-day'+(isToday?' today':'')+(hasNote?' has-note':'')+'">'+inner+'</div>';
+  }
+  calEl.innerHTML = html;
+
+  if(Object.keys(state.promo.byDate).length===0){
+    calEl.insertAdjacentHTML('beforeend','<div class="promo-empty-msg" style="grid-column:1/-1;">표시할 데이터가 없습니다.</div>');
+  }
+}
+
+document.getElementById('promo-prevBtn').addEventListener('click',()=>{
+  if(!state.promo.cur) return;
+  let {y,m}=state.promo.cur; m--; if(m<0){m=11;y--;}
+  state.promo.cur={y,m}; renderPromoCalendar();
+});
+document.getElementById('promo-nextBtn').addEventListener('click',()=>{
+  if(!state.promo.cur) return;
+  let {y,m}=state.promo.cur; m++; if(m>11){m=0;y++;}
+  state.promo.cur={y,m}; renderPromoCalendar();
+});
+document.getElementById('promo-refreshBtn').addEventListener('click',()=>loadPromoSchedule());
+
+/* ════════════════════════════════════════════════════════
    탭 전환 / 파일 입력 / 부팅
 ════════════════════════════════════════════════════════ */
 document.querySelectorAll('.tab-btn').forEach(btn=>{
@@ -1296,6 +1486,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     document.querySelectorAll('.view').forEach(v=>v.classList.remove('on'));
     btn.classList.add('active');
     document.getElementById('view-'+btn.dataset.tab).classList.add('on');
+    if(btn.dataset.tab==='promo' && !state.promo.loaded) loadPromoSchedule();
   });
 });
 
@@ -1312,6 +1503,7 @@ if(dz){
 if(isHttp){
   fetchData(true);
   state.refreshTimer=setInterval(()=>fetchData(false),REFRESH_MS);
+  loadPromoSchedule();
 }else{
   showError('이 파일은 <b>file://</b> 로 열렸습니다. 보안상 자동 로드가 불가하니<br><b>data.xlsx</b> 파일을 직접 선택하거나 아래로 드래그&amp;드롭해 주세요.');
   setLive(false,'파일 모드 — 수동 불러오기');
