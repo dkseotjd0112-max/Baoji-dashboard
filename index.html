@@ -197,27 +197,33 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
 .promo-detail-tbl th{position:sticky;top:0;background:var(--bg-base);text-align:left;padding:6px 8px;color:var(--text-tertiary);font-weight:600;border-bottom:1px solid var(--border-default);white-space:nowrap;}
 .promo-detail-tbl td{padding:5px 8px;border-bottom:1px solid var(--border-default);color:var(--text-primary);white-space:nowrap;}
 
-/* [2026-07-30 추가, 이후 플로팅 창 형태로 변경] 프로모션 일정 화면 공유 메모(모두가 같이 보는
-   KV 저장 메모). position:fixed로 화면 우측 하단에 고정해서 스크롤을 내려도 항상 같은 자리에
-   보이도록 함 - 부모(.view)가 display:none이면(다른 탭 볼 때) 자식의 fixed도 같이 안 보이므로
-   프로모션 탭에서만 자연스럽게 나타남. */
-.promo-memo-float{position:fixed;right:20px;bottom:20px;width:300px;max-width:calc(100vw - 40px);
+/* [2026-07-30 추가, 이후 플로팅 창 형태로 변경, 이동+상하좌우 크기조절 추가] 프로모션 일정 화면
+   공유 메모(모두가 같이 보는 KV 저장 메모). position:fixed로 화면에 고정해서 스크롤을 내려도
+   항상 같은 자리에 보이도록 함 - 부모(.view)가 display:none이면(다른 탭 볼 때) 자식의 fixed도
+   같이 안 보이므로 프로모션 탭에서만 자연스럽게 나타남. resize:both는 브라우저 기본 크기조절
+   손잡이(오른쪽 아래 모서리)로 좌우 폭과 상하 높이를 한 번에 조절할 수 있게 해줌(overflow:hidden이
+   있어야 resize가 동작함). flex 세로배치로 만들어서, 높이를 늘리면 메모 입력창(textarea)이
+   그만큼 늘어나 빈 공간 없이 커지도록 함. 제목줄을 마우스로 눌러 끌면(JS) 창을 자유롭게 옮길 수 있음. */
+.promo-memo-float{position:fixed;right:20px;bottom:20px;width:300px;height:280px;
+  max-width:calc(100vw - 40px);min-width:240px;max-height:80vh;min-height:140px;box-sizing:border-box;
+  display:flex;flex-direction:column;
   background:var(--bg-elevated);border:1px solid var(--border-default);border-radius:var(--radius-lg);
-  box-shadow:0 6px 24px rgba(17,17,17,.16);z-index:150;overflow:hidden;}
-.promo-memo-float-head{display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer;user-select:none;
+  box-shadow:0 6px 24px rgba(17,17,17,.16);z-index:150;overflow:hidden;resize:both;}
+.promo-memo-float-head{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:move;user-select:none;
   border-bottom:1px solid var(--border-default);font-size:13px;font-weight:700;color:var(--text-primary);}
 .promo-memo-info{margin-left:auto;font-size:10.5px;font-weight:400;color:var(--text-tertiary);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px;}
 .promo-memo-toggle{border:none;background:transparent;color:var(--text-tertiary);font-size:12px;
   cursor:pointer;padding:0;line-height:1;transition:transform .15s;}
 .promo-memo-float.is-collapsed .promo-memo-toggle{transform:rotate(-90deg);}
-.promo-memo-float-body{padding:12px 14px;}
+.promo-memo-float-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;padding:12px 14px;}
 .promo-memo-float.is-collapsed .promo-memo-float-body{display:none;}
-.promo-memo-textarea{width:100%;min-height:80px;resize:vertical;background:rgba(17,17,17,.04);
+.promo-memo-float.is-collapsed{height:auto !important;} /* 접었을 땐 크기조절로 정해둔 높이를 무시하고 제목줄 높이로 */
+.promo-memo-textarea{flex:1 1 auto;min-height:60px;width:100%;resize:none;background:rgba(17,17,17,.04);
   border:1px solid var(--border-default);border-radius:var(--radius-md);padding:10px 14px;
   color:var(--text-primary);font:400 13px/1.5 'Pretendard',sans-serif;box-sizing:border-box;}
 .promo-memo-textarea:focus{outline:none;border-color:var(--border-strong);}
-.promo-memo-actions{display:flex;align-items:center;gap:10px;margin-top:10px;}
+.promo-memo-actions{flex:0 0 auto;display:flex;align-items:center;gap:10px;margin-top:10px;}
 .promo-memo-status{font-size:11.5px;color:var(--text-tertiary);}
 .promo-memo-status.is-error{color:var(--color-error-fg);}
 .promo-memo-status.is-ok{color:var(--color-success-fg);}
@@ -1993,10 +1999,45 @@ async function savePromoMemo(){
   }
 }
 document.getElementById('promo-memoSaveBtn').addEventListener('click',()=>savePromoMemo());
-// [2026-07-30 추가] 플로팅 메모창 제목줄 클릭 시 접기/펼치기 (새로고침해도 기본은 펼쳐진 상태)
-document.getElementById('promo-memoFloatHead').addEventListener('click',()=>{
-  document.getElementById('promo-memoFloat').classList.toggle('is-collapsed');
-});
+
+// [2026-07-30 추가] 플로팅 메모창 - 제목줄을 눌러서 끄는(드래그) 이동 + 클릭만 하면 접기/펼치기.
+// 처음엔 CSS right/bottom으로 우측 하단에 고정돼있다가, 처음 드래그하는 순간 left/top 기준으로
+// 전환해서 그 이후로는 사용자가 옮긴 위치를 유지함(새로고침하면 다시 기본 위치로 돌아감 - 위치를
+// 저장해달라는 요청은 아직 없어서 페이지 안에서만 유지). 좌우 크기조절은 CSS resize:horizontal이
+// 처리하므로 이 JS는 이동만 담당함.
+(function(){
+  const floatBox = document.getElementById('promo-memoFloat');
+  const head = document.getElementById('promo-memoFloatHead');
+  if(!floatBox || !head) return;
+  let dragging = false, moved = false, startX = 0, startY = 0, startLeft = 0, startTop = 0;
+
+  head.addEventListener('mousedown', (e)=>{
+    if(e.target.closest('.promo-memo-toggle')) return; // 접기 버튼 클릭은 드래그로 취급하지 않음
+    dragging = true; moved = false;
+    const rect = floatBox.getBoundingClientRect();
+    startX = e.clientX; startY = e.clientY;
+    startLeft = rect.left; startTop = rect.top;
+    floatBox.style.left = startLeft + 'px';
+    floatBox.style.top = startTop + 'px';
+    floatBox.style.right = 'auto';
+    floatBox.style.bottom = 'auto';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', (e)=>{
+    if(!dragging) return;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    if(Math.abs(dx) > 4 || Math.abs(dy) > 4) moved = true;
+    const maxLeft = Math.max(window.innerWidth - floatBox.offsetWidth, 0);
+    const maxTop = Math.max(window.innerHeight - floatBox.offsetHeight, 0);
+    floatBox.style.left = Math.min(Math.max(startLeft + dx, 0), maxLeft) + 'px';
+    floatBox.style.top = Math.min(Math.max(startTop + dy, 0), maxTop) + 'px';
+  });
+  document.addEventListener('mouseup', ()=>{ dragging = false; });
+  head.addEventListener('click', ()=>{
+    if(moved){ moved = false; return; } // 드래그 직후 발생하는 클릭은 접기/펼치기 무시
+    floatBox.classList.toggle('is-collapsed');
+  });
+})();
 
 // [2026-07-30 추가] 달력 이전달/다음달/오늘 버튼 - 데이터를 다시 불러올 필요 없이 이미 가진
 // state.promo.rows로 그 달만 다시 그림(월 이동은 재조회 없이 즉시 반응하도록).
