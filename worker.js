@@ -83,14 +83,22 @@ const PROMO_SHEET_CSV_URL =
 const PROMO_DETAIL_CSV_URL =
   'https://docs.google.com/spreadsheets/d/1SmqBjPWhjFIPdMM1iuLAjzDJFO7mAsaOvu9DEhXR-8o/export?format=csv&gid=1620417368';
 
-// [2026-07-30 추가] 프로모션 일정 화면의 "공유 메모" - 로그인한 누구든 같은 내용을 보고
-// 고치는 팀 공유 메모칸. 구글시트가 아니라 KV(dashboard-users, 이미 계정/세션비밀키/
-// Gemini키를 저장하고 있는 그 저장소)에 그대로 하나의 키로 저장함 - 새 KV 네임스페이스를
-// Cloudflare에서 따로 만들 필요 없이 지금 있는 바인딩만으로 되고, 재배포해도 안 지워지는
-// 것도 이미 확인된 저장소라 재사용함. 브라우저 localStorage와 달리 이건 "그 컴퓨터에만"이
-// 아니라 로그인한 모든 사람이 같은 내용을 봄(마지막에 저장한 사람 걸로 덮어써짐).
+// [2026-07-30 추가, 같은 날 카카오톡 "나에게 쓰기" 방식으로 구조 변경] 프로모션 일정 화면의
+// "공유 메모" - 로그인한 누구든 같은 내용을 보고 쓰는 팀 공유 메모. 구글시트가 아니라
+// KV(dashboard-users, 이미 계정/세션비밀키/Gemini키를 저장하고 있는 그 저장소)에 저장함 - 새
+// KV 네임스페이스를 Cloudflare에서 따로 만들 필요 없이 지금 있는 바인딩만으로 되고, 재배포해도
+// 안 지워지는 것도 이미 확인된 저장소라 재사용함. 브라우저 localStorage와 달리 이건 "그
+// 컴퓨터에만"이 아니라 로그인한 모든 사람이 같은 내용을 봄.
+// [구조 변경] 처음엔 텍스트 하나를 통째로 덮어쓰는 방식이었으나, 사용자가 "카톡 나에게 쓰기처럼
+// 한 번 쓴 메모는 남기고 새로 쓴 내용이 쌓이면서 각각 시간이 남게" 요청함 - 그래서 KV에는 이제
+// 문자열 하나가 아니라 { entries: [{text, author, ts}, ...] } 형태의 배열을 저장하고, 저장할
+// 때마다 기존 걸 지우지 않고 새 항목을 맨 뒤에 추가(append)함. 무한정 쌓이는 것을 막기 위해
+// PROMO_MEMO_MAX_ENTRIES를 넘으면 가장 오래된 것부터 자동으로 버림(대화 스크롤 부담/KV 값
+// 크기 방지 목적 - 완전한 보관이 필요하면 사용자가 "메모장으로 내보내기" 버튼으로 그때그때
+// txt 파일로 백업하면 됨).
 const PROMO_MEMO_KV_KEY = '__promo_memo__';
-const PROMO_MEMO_MAX_LEN = 4000;
+const PROMO_MEMO_MAX_LEN = 1000; // 메모 한 건당 최대 글자수
+const PROMO_MEMO_MAX_ENTRIES = 300; // 이 개수를 넘으면 오래된 항목부터 자동 삭제
 
 export default {
   async fetch(request, env, ctx) {
@@ -328,17 +336,25 @@ async function handlePromoDetailRequest() {
   }
 }
 
-// [2026-07-30 추가] 프로모션 일정 화면의 공유 메모. 로그인한 모든 사람이 같은 내용을
-// 보고, 저장하면 그 내용으로 전부에게 덮어써짐(개인별 저장 아님). KV(dashboard-users)에
-// JSON 문자열 하나로 저장: {text, updatedBy, updatedAt}.
+// [2026-07-30 추가, 같은 날 카톡 "나에게 쓰기" 방식으로 구조 변경] 프로모션 일정 화면의 공유
+// 메모. 로그인한 모든 사람이 같은 목록을 봄. KV(dashboard-users)에 JSON 문자열 하나로 저장:
+// { entries: [{text, author, ts}, ...] } - 옛날 버전(문자열 하나짜리 {text,updatedBy,updatedAt})
+// 값이 남아있어도 entries가 없으므로 안전하게 빈 목록으로 취급함(에러 안 남).
+async function readPromoMemoEntries(env) {
+  const raw = await env.USERS.get(PROMO_MEMO_KV_KEY);
+  if (!raw) return [];
+  try {
+    const data = JSON.parse(raw);
+    return Array.isArray(data.entries) ? data.entries : [];
+  } catch (e) {
+    return [];
+  }
+}
+
 async function handlePromoMemoGet(env) {
   try {
-    const raw = await env.USERS.get(PROMO_MEMO_KV_KEY);
-    if (!raw) {
-      return aiJson({ ok: true, text: '', updatedBy: '', updatedAt: null });
-    }
-    const data = JSON.parse(raw);
-    return aiJson({ ok: true, text: data.text || '', updatedBy: data.updatedBy || '', updatedAt: data.updatedAt || null });
+    const entries = await readPromoMemoEntries(env);
+    return aiJson({ ok: true, entries });
   } catch (e) {
     return jsonError('메모를 불러오는 중 오류가 발생했습니다: ' + e.message, 500);
   }
@@ -352,20 +368,23 @@ async function handlePromoMemoPost(request, env, session) {
     return jsonError('요청 형식이 올바르지 않습니다.', 400);
   }
 
-  const text = String(body.text || '');
+  const text = String(body.text || '').trim();
+  if (!text) {
+    return jsonError('메모 내용을 입력하세요.', 400);
+  }
   if (text.length > PROMO_MEMO_MAX_LEN) {
-    return jsonError('메모는 ' + PROMO_MEMO_MAX_LEN + '자를 넘을 수 없습니다.', 400);
+    return jsonError('메모 한 건은 ' + PROMO_MEMO_MAX_LEN + '자를 넘을 수 없습니다.', 400);
   }
 
-  const data = {
-    text,
-    updatedBy: session.u,
-    updatedAt: Date.now(),
-  };
-
   try {
-    await env.USERS.put(PROMO_MEMO_KV_KEY, JSON.stringify(data));
-    return aiJson({ ok: true, text: data.text, updatedBy: data.updatedBy, updatedAt: data.updatedAt });
+    let entries = await readPromoMemoEntries(env);
+    entries.push({ text, author: session.u, ts: Date.now() });
+    // 오래된 항목부터 자동으로 잘라내서 무한정 쌓이지 않게 함(완전 보관은 "메모장으로 내보내기"로).
+    if (entries.length > PROMO_MEMO_MAX_ENTRIES) {
+      entries = entries.slice(entries.length - PROMO_MEMO_MAX_ENTRIES);
+    }
+    await env.USERS.put(PROMO_MEMO_KV_KEY, JSON.stringify({ entries }));
+    return aiJson({ ok: true, entries });
   } catch (e) {
     return jsonError('메모 저장 중 오류가 발생했습니다: ' + e.message, 500);
   }
