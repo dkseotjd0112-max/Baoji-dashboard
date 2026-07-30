@@ -60,6 +60,17 @@ async function getGeminiKey(env) {
   return key;
 }
 
+// [2026-07-29 추가] 프로모션 일정(월간 달력) 기능용. 구글시트("바오지_메타 요약" 탭,
+// 링크 있는 사람 모두 보기 권한)의 CSV 내보내기 URL을 서버(이 Worker)가 대신
+// 가져와서 브라우저에 그대로 돌려줍니다. 브라우저가 docs.google.com을 직접
+// fetch()하면 크로스오리진(CORS) 정책 때문에 배포 후 예고 없이 막힐 수 있어서,
+// 이미 검증된 "서버가 대신 가져와서 같은 출처(same-origin)로 돌려주는" 방식
+// (/api/gemini-key와 동일한 패턴)을 그대로 재사용했습니다. 시트 자체가 "링크
+// 있는 사람 모두" 권한이라 이 호출엔 별도 인증이 필요 없지만, 라우트 자체는
+// 로그인 세션 확인 이후에만 실행되도록 아래 fetch() 안에 배치했습니다.
+const PROMO_SHEET_CSV_URL =
+  'https://docs.google.com/spreadsheets/d/1SmqBjPWhjFIPdMM1iuLAjzDJFO7mAsaOvu9DEhXR-8o/export?format=csv&gid=1581551504';
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -134,6 +145,11 @@ export default {
     // 정도 노출은 감수하기로 함.
     if (url.pathname === '/api/gemini-key' && request.method === 'GET') {
       return handleGeminiKeyRequest(env);
+    }
+
+    // [2026-07-29 추가] 프로모션 일정 달력용 구글시트 CSV 프록시
+    if (url.pathname === '/api/promo-schedule' && request.method === 'GET') {
+      return handlePromoScheduleRequest();
     }
 
     // 그 외 나머지(index.html 등)는 정적 자산 그대로 서빙
@@ -235,4 +251,26 @@ function aiJson(obj, status = 200) {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
+}
+
+// [2026-07-29 추가] 구글시트 CSV를 대신 가져와서 그대로 돌려줌(같은 출처 응답이 되므로
+// 브라우저 쪽 CORS 문제가 원천적으로 발생하지 않음). 시트 자체 접근 실패(비공개로
+// 바뀌었거나 삭제된 경우 등)는 502로, 그 외 예외는 500으로 구분해서 알려줌.
+async function handlePromoScheduleRequest() {
+  try {
+    const res = await fetch(PROMO_SHEET_CSV_URL);
+    if (!res.ok) {
+      return jsonError(
+        '구글시트에서 데이터를 가져오지 못했습니다(공유 권한이 "링크가 있는 모든 사용자"로 되어있는지 확인해주세요). HTTP ' + res.status,
+        502
+      );
+    }
+    const csv = await res.text();
+    return new Response(csv, {
+      status: 200,
+      headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Cache-Control': 'no-store' },
+    });
+  } catch (e) {
+    return jsonError('프로모션 일정을 불러오는 중 오류가 발생했습니다: ' + e.message, 500);
+  }
 }
