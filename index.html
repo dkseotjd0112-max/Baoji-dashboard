@@ -521,6 +521,12 @@ function parseDate(v){
       if(o) return new Date(o.y, o.m-1, o.d, o.H||0, o.M||0, o.S||0);
     }
   }
+  // [2026-07-30 추가] "YYYY-MM-DD"/"YYYY/MM/DD" 형태의 순수 날짜 문자열(구글시트 CSV 등에서 옴)은
+  // new Date(문자열)로 그냥 넘기면 UTC 자정으로 해석되어, 한국(UTC+9) 등에서는 하루 밀리는 문제가
+  // 있었음(오늘 날짜로 시작일을 입력해도 "예정"으로 남아있던 버그 - 프로모션 일정 진행중 판정용).
+  // 연/월/일을 직접 뽑아 로컬 자정 기준으로 Date를 만들어서 이 문제를 피함.
+  const m = String(v).trim().match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/);
+  if(m) return new Date(Number(m[1]), Number(m[2])-1, Number(m[3]));
   const p = new Date(v);
   return isNaN(p) ? null : p;
 }
