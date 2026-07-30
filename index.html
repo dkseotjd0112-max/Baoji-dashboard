@@ -170,13 +170,19 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
   font-size:14px;line-height:1;cursor:pointer;color:var(--text-secondary);}
 .promo-cal-nav:hover{border-color:var(--border-strong);color:var(--text-primary);}
 .promo-cal-dow{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-size:11px;color:var(--text-tertiary);margin-bottom:4px;}
-.promo-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
-.promo-cal-cell{min-height:64px;border:1px solid var(--border-default);border-radius:var(--radius-sm);padding:4px 5px;background:var(--bg-elevated);}
+/* [2026-07-30 수정] 칸마다 작은 태그를 넣던 방식 대신, 구글 캘린더처럼 여러 날에 걸쳐 이어지는
+   막대로 표현하는 방식으로 교체. 주(week) 단위 블록 안에 날짜 배경 칸과 막대 오버레이를 겹쳐서 그림. */
+.promo-cal-grid{display:flex;flex-direction:column;gap:3px;}
+.promo-cal-week{position:relative;}
+.promo-cal-daynums{display:grid;grid-template-columns:repeat(7,1fr);gap:0;height:100%;}
+.promo-cal-cell{border:1px solid var(--border-default);background:var(--bg-elevated);}
 .promo-cal-cell.is-empty{background:transparent;border-color:transparent;}
 .promo-cal-cell.is-today{border-color:var(--color-accent-fg,#2c4bb8);border-width:2px;}
-.promo-cal-daynum{font-size:11px;color:var(--text-tertiary);margin-bottom:3px;}
-.promo-cal-pill{font-size:10px;color:#fff;border-radius:4px;padding:1px 5px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.promo-cal-more{font-size:10px;color:var(--text-tertiary);}
+.promo-cal-daynum{font-size:11px;color:var(--text-tertiary);padding:3px 5px;}
+.promo-cal-bars{position:absolute;top:0;left:0;right:0;bottom:0;}
+.promo-cal-bar{position:absolute;height:18px;line-height:18px;font-size:10.5px;font-weight:600;color:#fff;
+  border-radius:4px;padding-left:6px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.promo-cal-more{position:absolute;font-size:10px;color:var(--text-tertiary);right:6px;}
 .promo-warn-list{display:flex;flex-direction:column;gap:8px;}
 .promo-warn-item{background:rgba(212,47,82,.08);border:1px solid rgba(212,47,82,.25);border-radius:var(--radius-md);
   padding:10px 14px;font-size:12.5px;color:var(--text-primary);line-height:1.5;}
@@ -1724,6 +1730,10 @@ function renderPromoWarnings(){
 // [2026-07-30 추가] 월간 달력 뷰 - 간트차트만으로는 "이 날 뭐가 겹치나"를 한눈에 보기 어렵다는
 // 요청으로 추가함. 같은 프로모션은 간트차트와 같은 색(getPromoColorMap)을 쓰고, 겹침 경고에 해당하는
 // 프로모션은 빨간 테두리를 줌. 한 칸에 너무 많으면(4개 초과) "+N개 더"로 줄여서 칸이 무한정 커지지 않게 함.
+// [2026-07-30 수정] "가시성이 떨어진다"는 피드백으로, 칸마다 작은 태그를 넣던 방식에서
+// 구글 캘린더처럼 여러 날에 걸쳐 하나로 이어지는 막대를 그리는 방식으로 교체함.
+// 같은 프로모션은 주가 바뀌어도 항상 같은 줄(레인)에 나오도록, 달 전체 기준으로 레인을 먼저
+// 배정한 뒤(구간 그래프 채색과 동일한 방식) 각 주마다 그 레인 위치에 맞춰 막대 조각을 그림.
 function renderPromoCalendar(){
   const grid = document.getElementById('promo-calGrid');
   const label = document.getElementById('promo-calLabel');
@@ -1731,32 +1741,82 @@ function renderPromoCalendar(){
   const y = state.promo.calYear, m = state.promo.calMonth; // m은 0=1월
   label.textContent = y+'년 '+(m+1)+'월';
 
-  const rows = state.promo.rows.filter(r=>r.start && r.end);
   const colorMap = getPromoColorMap();
   const today = new Date(); today.setHours(0,0,0,0);
   const firstDow = new Date(y,m,1).getDay(); // 0=일요일
   const daysInMonth = new Date(y,m+1,0).getDate();
+  const monthStart = new Date(y,m,1);
+  const monthEnd = new Date(y,m,daysInMonth);
+
+  const active = state.promo.rows.filter(r=>{
+    if(!r.start || !r.end) return false;
+    const s = new Date(r.start); s.setHours(0,0,0,0);
+    const e = new Date(r.end); e.setHours(0,0,0,0);
+    return s<=monthEnd && e>=monthStart;
+  }).sort((a,b)=> a.start-b.start || (b.end-b.start)-(a.end-a.start));
+
+  const laneEnds = [];
+  active.forEach(r=>{
+    const s = new Date(r.start); s.setHours(0,0,0,0);
+    let lane = laneEnds.findIndex(end=> end < s);
+    if(lane===-1) lane = laneEnds.length;
+    const e = new Date(r.end); e.setHours(0,0,0,0);
+    laneEnds[lane] = e;
+    r._lane = lane;
+  });
+
+  const MAX_LANES = 3, BAR_H = 18, BAR_GAP = 3, DAYNUM_H = 18;
+  const weekRowH = DAYNUM_H + MAX_LANES*(BAR_H+BAR_GAP) + 6;
+
+  const cells = [];
+  for(let i=0;i<firstDow;i++) cells.push(null);
+  for(let d=1; d<=daysInMonth; d++) cells.push(d);
+  while(cells.length % 7 !== 0) cells.push(null);
 
   let html = '';
-  for(let i=0;i<firstDow;i++) html += '<div class="promo-cal-cell is-empty"></div>';
-  for(let d=1; d<=daysInMonth; d++){
-    const cellDate = new Date(y,m,d);
-    const isToday = cellDate.getTime()===today.getTime();
-    const matches = rows.filter(r=>{
+  for(let wi=0; wi<cells.length; wi+=7){
+    const week = cells.slice(wi, wi+7);
+    const weekDates = week.map(d=> d==null ? null : new Date(y,m,d));
+
+    html += '<div class="promo-cal-week" style="height:'+weekRowH+'px;">';
+    html += '<div class="promo-cal-daynums">';
+    week.forEach((d,ci)=>{
+      if(d==null){ html += '<div class="promo-cal-cell is-empty"></div>'; return; }
+      const isToday = weekDates[ci].getTime()===today.getTime();
+      html += '<div class="promo-cal-cell'+(isToday?' is-today':'')+'"><div class="promo-cal-daynum">'+d+'</div></div>';
+    });
+    html += '</div>';
+
+    html += '<div class="promo-cal-bars">';
+    active.forEach(r=>{
+      if(r._lane>=MAX_LANES) return; // 초과 레인은 막대 대신 아래 "+N개 더"로 표시
       const s = new Date(r.start); s.setHours(0,0,0,0);
       const e = new Date(r.end); e.setHours(0,0,0,0);
-      return s<=cellDate && cellDate<=e;
-    });
-    const maxShow = 4;
-    const pills = matches.slice(0,maxShow).map(r=>{
+      let segStart=-1, segEnd=-1;
+      for(let c=0;c<7;c++){
+        const wd = weekDates[c];
+        if(wd && wd>=s && wd<=e){ if(segStart===-1) segStart=c; segEnd=c; }
+      }
+      if(segStart===-1) return;
       const overlap = state.promo.overlapNames.has(r.name);
-      const style = 'background:'+colorMap[r.name]+(overlap ? ';outline:2px solid rgba(212,47,82,1);outline-offset:-2px;' : '');
-      return '<div class="promo-cal-pill" style="'+style+'" title="'+escAttr(r.name)+(r.channel?' · '+escAttr(r.channel):'')+'">'+escAttr(r.name)+'</div>';
-    }).join('');
-    const more = matches.length>maxShow ? '<div class="promo-cal-more">+'+(matches.length-maxShow)+'개 더</div>' : '';
-    html += '<div class="promo-cal-cell'+(isToday?' is-today':'')+'">'+
-      '<div class="promo-cal-daynum">'+d+'</div>'+pills+more+
-    '</div>';
+      const left = 'calc('+segStart+' * (100% / 7) + 2px)';
+      const width = 'calc('+(segEnd-segStart+1)+' * (100% / 7) - 4px)';
+      const top = DAYNUM_H + r._lane*(BAR_H+BAR_GAP);
+      const style = 'left:'+left+';width:'+width+';top:'+top+'px;background:'+colorMap[r.name]+
+        (overlap ? ';outline:2px solid rgba(212,47,82,1);outline-offset:-2px;' : '');
+      html += '<div class="promo-cal-bar" style="'+style+'" title="'+escAttr(r.name)+(r.channel?' · '+escAttr(r.channel):'')+'">'+escAttr(r.name)+'</div>';
+    });
+    const overflowCount = active.filter(r=>{
+      if(r._lane<MAX_LANES) return false;
+      const s = new Date(r.start); s.setHours(0,0,0,0);
+      const e = new Date(r.end); e.setHours(0,0,0,0);
+      return weekDates.some(wd=> wd && wd>=s && wd<=e);
+    }).length;
+    if(overflowCount>0){
+      html += '<div class="promo-cal-more" style="top:'+(DAYNUM_H+MAX_LANES*(BAR_H+BAR_GAP))+'px;">+'+overflowCount+'개 더</div>';
+    }
+    html += '</div>'; // .promo-cal-bars
+    html += '</div>'; // .promo-cal-week
   }
   grid.innerHTML = html;
 }
