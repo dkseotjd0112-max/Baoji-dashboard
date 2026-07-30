@@ -60,7 +60,9 @@ async function getGeminiKey(env) {
   return key;
 }
 
-// [2026-07-29 추가] 프로모션 일정(월간 달력) 기능용. 구글시트("바오지_메타 요약" 탭,
+// [2026-07-29 추가, 2026-07-30 데이터 소스를 "프로모션일정" 탭으로 변경]
+// 프로모션 일정(타임라인+겹침경고) 기능용. 구글시트("프로모션일정" 탭 - 담당자가
+// 직접 프로모션명/시작일/종료일/대상채널/대상 품목·카테고리/비고를 입력하는 시트,
 // 링크 있는 사람 모두 보기 권한)의 CSV 내보내기 URL을 서버(이 Worker)가 대신
 // 가져와서 브라우저에 그대로 돌려줍니다. 브라우저가 docs.google.com을 직접
 // fetch()하면 크로스오리진(CORS) 정책 때문에 배포 후 예고 없이 막힐 수 있어서,
@@ -68,8 +70,18 @@ async function getGeminiKey(env) {
 // (/api/gemini-key와 동일한 패턴)을 그대로 재사용했습니다. 시트 자체가 "링크
 // 있는 사람 모두" 권한이라 이 호출엔 별도 인증이 필요 없지만, 라우트 자체는
 // 로그인 세션 확인 이후에만 실행되도록 아래 fetch() 안에 배치했습니다.
+// [중요] 이 URL은 매번 실시간으로 그대로 가져오기만 하므로(캐시 없음), 담당자가
+// 구글시트의 "프로모션일정" 탭 내용을 수정하면 별도 재배포(GitHub push) 없이도
+// 대시보드를 새로고침하는 즉시 반영됩니다 - gid(탭 번호) 자체가 바뀌지 않는 한
+// 이 파일을 다시 건드릴 필요가 없습니다.
 const PROMO_SHEET_CSV_URL =
-  'https://docs.google.com/spreadsheets/d/1SmqBjPWhjFIPdMM1iuLAjzDJFO7mAsaOvu9DEhXR-8o/export?format=csv&gid=1581551504';
+  'https://docs.google.com/spreadsheets/d/1SmqBjPWhjFIPdMM1iuLAjzDJFO7mAsaOvu9DEhXR-8o/export?format=csv&gid=1535595105';
+
+// [2026-07-30 추가] 프로모션별 SKU 상세 목록("프로모션상세" 탭). 프로모션일정 탭과는
+// "프로모션명"(텍스트) 기준으로 매칭함 - 두 탭에 같은 프로모션명을 각각 입력해두면
+// 대시보드가 알아서 연결함. 위와 동일한 same-origin 프록시 패턴.
+const PROMO_DETAIL_CSV_URL =
+  'https://docs.google.com/spreadsheets/d/1SmqBjPWhjFIPdMM1iuLAjzDJFO7mAsaOvu9DEhXR-8o/export?format=csv&gid=1620417368';
 
 export default {
   async fetch(request, env, ctx) {
@@ -150,6 +162,11 @@ export default {
     // [2026-07-29 추가] 프로모션 일정 달력용 구글시트 CSV 프록시
     if (url.pathname === '/api/promo-schedule' && request.method === 'GET') {
       return handlePromoScheduleRequest();
+    }
+
+    // [2026-07-30 추가] 프로모션별 SKU 상세 목록 구글시트 CSV 프록시
+    if (url.pathname === '/api/promo-detail' && request.method === 'GET') {
+      return handlePromoDetailRequest();
     }
 
     // 그 외 나머지(index.html 등)는 정적 자산 그대로 서빙
@@ -272,5 +289,24 @@ async function handlePromoScheduleRequest() {
     });
   } catch (e) {
     return jsonError('프로모션 일정을 불러오는 중 오류가 발생했습니다: ' + e.message, 500);
+  }
+}
+
+async function handlePromoDetailRequest() {
+  try {
+    const res = await fetch(PROMO_DETAIL_CSV_URL);
+    if (!res.ok) {
+      return jsonError(
+        '구글시트(프로모션상세)에서 데이터를 가져오지 못했습니다. HTTP ' + res.status,
+        502
+      );
+    }
+    const csv = await res.text();
+    return new Response(csv, {
+      status: 200,
+      headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Cache-Control': 'no-store' },
+    });
+  } catch (e) {
+    return jsonError('프로모션 상세품목을 불러오는 중 오류가 발생했습니다: ' + e.message, 500);
   }
 }

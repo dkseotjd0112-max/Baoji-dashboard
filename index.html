@@ -147,26 +147,31 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
 .note-badges{display:flex;gap:4px;flex-wrap:wrap;}
 .hide-col{display:none;}
 
-/* [2026-07-29 추가] 프로모션 일정 (월간 달력) */
-.promo-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
-.promo-nav-btn{font:700 13px/1 'Pretendard',sans-serif;border:1px solid var(--border-default);background:var(--bg-elevated);
-  color:var(--text-primary);border-radius:var(--radius-md);padding:8px 14px;cursor:pointer;}
-.promo-nav-btn:hover{border-color:var(--border-strong);}
-.promo-month-label{font:700 16px/1 'Pretendard',sans-serif;color:var(--text-primary);min-width:100px;text-align:center;}
+/* [2026-07-29 추가, 2026-07-30 타임라인+겹침경고 방식으로 교체] 프로모션 일정 */
+.promo-status{font-size:12px;color:var(--text-tertiary);margin-bottom:10px;min-height:16px;}
+.promo-empty-msg{font-size:13px;color:var(--text-tertiary);padding:20px 0;text-align:center;}
 .promo-refresh{margin-left:auto;font:600 12px/1 'Pretendard',sans-serif;border:1px solid var(--border-default);background:transparent;
   color:var(--text-secondary);border-radius:var(--radius-full);padding:8px 14px;cursor:pointer;}
 .promo-refresh:hover{border-color:var(--border-strong);color:var(--text-primary);}
-.promo-status{font-size:12px;color:var(--text-tertiary);margin-bottom:10px;min-height:16px;}
-.promo-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;}
-.promo-dow{font-size:11px;font-weight:700;color:var(--text-tertiary);text-align:center;padding:4px 0 8px;}
-.promo-day{min-height:92px;border:1px solid var(--border-default);border-radius:var(--radius-md);padding:6px 7px;background:var(--bg-elevated);}
-.promo-day.empty{background:transparent;border-color:transparent;}
-.promo-day.today{border-color:var(--color-primary-500);border-width:2px;padding:5px 6px;}
-.promo-day.has-note{border-color:var(--color-primary-300);}
-.promo-day .d-num{font-size:12px;font-weight:700;color:var(--text-primary);margin-bottom:4px;}
-.promo-day .d-spend{font-size:10px;color:var(--text-tertiary);margin-bottom:3px;}
-.promo-day .d-note{font-size:10.5px;color:var(--text-secondary);line-height:1.35;word-break:break-word;}
-.promo-empty-msg{font-size:13px;color:var(--text-tertiary);padding:20px 0;text-align:center;}
+.promo-cards{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:4px;}
+.promo-card{flex:1;min-width:200px;background:var(--bg-elevated);border:1px solid var(--border-default);border-left:3px solid var(--color-success-fg);
+  border-radius:var(--radius-md);padding:12px 14px;}
+.promo-card .p-name{font-size:13.5px;font-weight:700;color:var(--text-primary);margin-bottom:4px;}
+.promo-card .p-period{font-size:11px;color:var(--text-tertiary);margin-bottom:6px;}
+.promo-card .p-note{font-size:11.5px;color:var(--text-secondary);line-height:1.4;}
+.promo-warn-list{display:flex;flex-direction:column;gap:8px;}
+.promo-warn-item{background:rgba(212,47,82,.08);border:1px solid rgba(212,47,82,.25);border-radius:var(--radius-md);
+  padding:10px 14px;font-size:12.5px;color:var(--text-primary);line-height:1.5;}
+.promo-warn-item b{color:var(--color-error-fg);}
+.promo-tbl-wrap{overflow:auto;}
+.promo-row{cursor:pointer;}
+.promo-row:hover td{background:rgba(17,17,17,.03);}
+.promo-expand-ic{display:inline-block;color:var(--text-tertiary);font-size:10px;margin-left:4px;}
+.promo-detail-row td{background:rgba(17,17,17,.02);padding:10px 12px;}
+.promo-detail-wrap{overflow:auto;max-height:320px;}
+.promo-detail-tbl{width:100%;border-collapse:collapse;font-size:11.5px;}
+.promo-detail-tbl th{position:sticky;top:0;background:var(--bg-base);text-align:left;padding:6px 8px;color:var(--text-tertiary);font-weight:600;border-bottom:1px solid var(--border-default);white-space:nowrap;}
+.promo-detail-tbl td{padding:5px 8px;border-bottom:1px solid var(--border-default);color:var(--text-primary);white-space:nowrap;}
 
 .ai-box{background:var(--bg-elevated);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:18px;}
 .ai-box h3{margin:0 0 4px;font-size:15px;font-weight:700;}
@@ -426,16 +431,38 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
     <!-- ══════════════════ 프로모션 일정 ══════════════════ -->
     <div class="view" id="view-promo">
       <section class="section card">
-        <h3>프로모션 / 광고 일정 (월간 달력)</h3>
-        <p class="q">구글시트 "바오지_메타 요약" 탭의 일별 광고 기록을 달력으로 표시합니다. 각 날짜 칸의 문구는 "메타 구매 광고" 메모 원문 그대로입니다.</p>
-        <div class="promo-toolbar">
-          <button type="button" class="promo-nav-btn" id="promo-prevBtn">‹ 이전달</button>
-          <span class="promo-month-label" id="promo-monthLabel">-</span>
-          <button type="button" class="promo-nav-btn" id="promo-nextBtn">다음달 ›</button>
+        <div class="table-head">
+          <h3>지금 진행중인 프로모션</h3>
           <button type="button" class="promo-refresh" id="promo-refreshBtn">새로고침</button>
         </div>
+        <p class="q">구글시트 "프로모션일정" 탭 기준, 오늘 날짜가 시작일~종료일 사이인 항목만 표시합니다.</p>
         <div class="promo-status" id="promo-status">불러오는 중…</div>
-        <div class="promo-cal" id="promo-cal"></div>
+        <div class="promo-cards" id="promo-cards"></div>
+      </section>
+
+      <section class="section card">
+        <h3>일정 타임라인</h3>
+        <p class="q">프로모션별 기간을 막대로 표시합니다. 막대가 가로로 겹치면 그 기간에 두 프로모션이 동시에 진행된다는 뜻입니다. 빨간 막대는 아래 "겹침 경고"에 해당하는 항목입니다.</p>
+        <div class="chart-box" id="promo-ganttBox" style="height:260px;"><canvas id="promo-ch-gantt"></canvas></div>
+      </section>
+
+      <section class="section card">
+        <h3>겹침 경고</h3>
+        <p class="q">기간과 대상 품목/카테고리가 동시에 겹치는 프로모션 조합을 자동으로 찾아 표시합니다 (대상 품목/카테고리 표기가 서로 다르면 자동으로 못 잡을 수 있으니, 입력 시 카테고리명·모델명을 대시보드와 통일해주세요).</p>
+        <div class="promo-warn-list" id="promo-warnList"></div>
+      </section>
+
+      <section class="section card">
+        <div class="table-head">
+          <h3>프로모션 일정 원본</h3>
+          <span class="row-count" id="promo-rowCount"></span>
+        </div>
+        <p class="q">행을 클릭하면 "프로모션상세" 시트에 등록된 SKU 목록이 펼쳐집니다. 품목수·예상매출은 프로모션상세 시트(상품코드·수량)와 재고 마스터 데이터를 이용해 대시보드가 자동으로 계산한 값입니다.</p>
+        <div class="promo-tbl-wrap tbl-scroll">
+          <table id="promo-table"><thead><tr>
+            <th>No</th><th>프로모션명</th><th>시작일</th><th>종료일</th><th>대상채널</th><th>대상 품목/카테고리</th><th>품목수</th><th>예상매출</th><th>상태</th><th>비고</th>
+          </tr></thead><tbody id="promo-tbody"></tbody></table>
+        </div>
       </section>
     </div>
 
@@ -462,7 +489,8 @@ const state = {
   ordFilters:{brand:'ALL',category:'ALL',model:'ALL',channel:'ALL',type:'ALL',gender:'ALL'}, ordSearch:'', ordSort:{col:'date',dir:-1}, ordDrills:[],
   ordPeriod:{preset:'last1m', from:'', to:''}, ordMetric:'qty',
   charts:{}, refreshTimer:null, openMsel:null,
-  promo:{byDate:{}, cur:null, loaded:false},
+  promo:{rows:[], warnings:[], detailByName:{}, loaded:false},
+  invByCode:{},
 };
 
 const toNum = v => { if(v==null||v==='')return 0; const n=parseFloat(String(v).replace(/,/g,'')); return isNaN(n)?0:n; };
@@ -571,6 +599,10 @@ function parseWorkbook(buf){
   });
 
   const priceByCode = {}; state.inv.forEach(it=>{ if(it.code) priceByCode[it.code]=it.price||0; });
+  // [2026-07-30 추가] 프로모션 상세품목(구글시트) enrichment용 - 상품코드로 상품명/브랜드/
+  // 카테고리/성별/모델명/사이즈를 자동 조회하기 위한 조회표. 담당자가 프로모션상세 탭에
+  // 상품코드만 입력해도 대시보드가 여기서 나머지 정보를 자동으로 채워서 보여줌.
+  state.invByCode = {}; state.inv.forEach(it=>{ if(it.code) state.invByCode[it.code]=it; });
 
   // [2026-07-29 추가] 일반(표시제한) 계정용 data_general.xlsx에는 온라인판매가/소비자가격 컬럼
   // 자체를 아예 빼서 내보내도록 함 - 그래서 가격 데이터가 있는지 여부로 "이 계정이 가격을 볼 수
@@ -1327,12 +1359,19 @@ document.getElementById('o-aiAskBtn').addEventListener('click', ()=>{
 document.getElementById('o-aiInput').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('o-aiAskBtn').click(); });
 
 /* ════════════════════════════════════════════════════════
-   프로모션 일정 (월간 달력) - 구글시트 CSV(서버 프록시) 기반
-   [2026-07-29 추가] worker.js의 GET /api/promo-schedule 라우트가 구글시트
-   "바오지_메타 요약" 탭을 서버에서 대신 가져와 same-origin으로 돌려줌 -
-   브라우저가 docs.google.com을 직접 fetch하지 않으므로 CORS 걱정 없음.
+   프로모션 일정 - 구글시트 CSV(서버 프록시) 기반
+   [2026-07-29 추가, 2026-07-30 타임라인+겹침경고 방식으로 교체]
+   worker.js의 GET /api/promo-schedule 라우트가 구글시트 "프로모션일정" 탭을
+   서버에서 대신 가져와 same-origin으로 돌려줌 - 브라우저가 docs.google.com을
+   직접 fetch하지 않으므로 CORS 걱정 없음. 이 탭은 담당자가 직접 채워 넣는
+   시트이고, 페이지를 새로고침할 때마다 매번 새로 가져오므로 시트 내용을
+   고치면 별도 배포(GitHub push) 없이 다음 새로고침부터 바로 반영됨.
 ════════════════════════════════════════════════════════ */
 const PROMO_ENDPOINT = '/api/promo-schedule';
+// [2026-07-30 추가] 프로모션별 SKU 상세 목록("프로모션상세" 탭 - 담당자가 프로모션명/상품코드/
+// 프로모션수량만 입력하면, 나머지(상품명/브랜드/카테고리/성별/모델명/사이즈)는 상품코드로
+// state.invByCode(재고 마스터)를 조회해 대시보드가 자동으로 채워서 보여줌).
+const PROMO_DETAIL_ENDPOINT = '/api/promo-detail';
 
 // 따옴표로 감싼 필드(콤마 포함 숫자 등)를 정확히 처리하는 최소 CSV 파서
 function parseCsvText(text){
@@ -1354,127 +1393,299 @@ function parseCsvText(text){
   return rows;
 }
 
-// 시트의 "6월 18일" 같은 한글 월/일 표기 -> Date. 시트에 연도 표기가 없어서
-// 현재 연도로 가정함(해가 바뀌어도 12월→1월 롤오버 데이터가 쌓이면 이 부분에
-// 연도 판별 로직을 보강해야 함 - 지금은 단일 연도 범위만 사용 중이라 단순화함).
-function parseKoreanMD(s, yearHint){
-  const m = String(s).match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일/);
-  if(!m) return null;
-  const mo = parseInt(m[1],10), d = parseInt(m[2],10);
-  if(!mo||!d) return null;
-  return new Date(yearHint, mo-1, d);
+// "대상 품목/카테고리" 칸의 콤마/공백 구분 텍스트를 토큰 배열로 (겹침 비교용, 대소문자/공백 무시)
+function promoTokens(s){
+  return String(s||'').split(/[,\/\s]+/).map(t=>t.trim().toLowerCase()).filter(Boolean);
+}
+function promoDateOverlap(a,b){
+  return a.start && a.end && b.start && b.end && a.start<=b.end && b.start<=a.end;
+}
+function promoItemOverlap(a,b){
+  const set = new Set(a.itemTokens);
+  return b.itemTokens.filter(t=>set.has(t));
+}
+// 오늘 날짜 기준 예정/진행중/종료 계산 (시트의 상태(자동) 수식 값 대신 화면에서 직접 계산해서
+// 시간대·수식 오류 등의 영향 없이 하나의 기준으로만 판단함)
+function promoStatus(r){
+  if(!r.start || !r.end) return '';
+  const today = new Date(); today.setHours(0,0,0,0);
+  if(today < r.start) return '예정';
+  if(today > r.end) return '종료';
+  return '진행중';
+}
+
+// "프로모션상세" 탭 CSV를 파싱해서 프로모션명별로 묶어줌(A프로모션번호는 사용자 내부관리용이라
+// 조인에는 안 쓰고, B프로모션명 텍스트를 프로모션일정 탭과 연결하는 키로 사용함).
+function parsePromoDetailCsv(text){
+  const csvRows = parseCsvText(text);
+  let headerRowIdx=-1, header=null;
+  for(let i=0;i<csvRows.length;i++){
+    if(csvRows[i].some(c=>c.trim()==='상품코드')){ headerRowIdx=i; header=csvRows[i]; break; }
+  }
+  if(headerRowIdx<0) return {};
+
+  const idxName   = header.findIndex(c=>c.trim()==='프로모션명');
+  const idxSeq    = header.findIndex(c=>c.trim()==='번호');
+  const idxCode   = header.findIndex(c=>c.trim()==='상품코드');
+  const idxNameR  = header.findIndex(c=>c.trim()==='상품명');
+  const idxBrandR = header.findIndex(c=>c.trim()==='브랜드');
+  const idxCatR   = header.findIndex(c=>c.trim()==='카테고리');
+  const idxGenR   = header.findIndex(c=>c.trim()==='성별');
+  const idxModelR = header.findIndex(c=>c.trim()==='모델명(라인업)');
+  const idxColorR = header.findIndex(c=>c.trim()==='컬러(한글)');
+  const idxSizeR  = header.findIndex(c=>c.trim()==='사이즈');
+  const idxQty    = header.findIndex(c=>c.trim()==='프로모션수량');
+
+  const byName = {};
+  for(let i=headerRowIdx+1;i<csvRows.length;i++){
+    const r = csvRows[i];
+    const code = idxCode>=0 ? (r[idxCode]||'').trim() : '';
+    const name = idxName>=0 ? (r[idxName]||'').trim() : '';
+    if(!code || !name) continue; // 상품코드/프로모션명 둘 다 있어야 유효한 행으로 인정
+    (byName[name] = byName[name]||[]).push({
+      seq: idxSeq>=0 ? (r[idxSeq]||'').trim() : '',
+      code,
+      nameRaw:  idxNameR>=0  ? (r[idxNameR]||'').trim()  : '',
+      brandRaw: idxBrandR>=0 ? (r[idxBrandR]||'').trim() : '',
+      catRaw:   idxCatR>=0   ? (r[idxCatR]||'').trim()   : '',
+      genRaw:   idxGenR>=0   ? (r[idxGenR]||'').trim()   : '',
+      modelRaw: idxModelR>=0 ? (r[idxModelR]||'').trim() : '',
+      colorRaw: idxColorR>=0 ? (r[idxColorR]||'').trim() : '',
+      sizeRaw:  idxSizeR>=0  ? (r[idxSizeR]||'').trim()  : '',
+      qty: idxQty>=0 ? toNum(r[idxQty]) : 0,
+    });
+  }
+  return byName;
 }
 
 async function loadPromoSchedule(){
   const statusEl = document.getElementById('promo-status');
-  const calEl = document.getElementById('promo-cal');
   if(statusEl) statusEl.textContent = '불러오는 중…';
   try{
-    const res = await fetch(PROMO_ENDPOINT + '?t=' + Date.now());
-    const ct = res.headers.get('Content-Type')||'';
-    if(!res.ok){
-      let msg = 'HTTP '+res.status;
-      if(ct.includes('json')){ try{ const j=await res.json(); if(j&&j.message) msg=j.message; }catch(e){} }
+    const [schedRes, detailRes] = await Promise.all([
+      fetch(PROMO_ENDPOINT + '?t=' + Date.now()),
+      fetch(PROMO_DETAIL_ENDPOINT + '?t=' + Date.now()),
+    ]);
+    if(!schedRes.ok){
+      let msg = 'HTTP '+schedRes.status;
+      const ct = schedRes.headers.get('Content-Type')||'';
+      if(ct.includes('json')){ try{ const j=await schedRes.json(); if(j&&j.message) msg=j.message; }catch(e){} }
       throw new Error(msg);
     }
-    const text = await res.text();
-    const rows = parseCsvText(text);
+    const text = await schedRes.text();
+    const csvRows = parseCsvText(text);
 
-    // 헤더행 찾기: 시트 상단에 빈 행/빈 열이 섞여있어 "날짜" 셀이 있는 행을 직접 탐색
+    // 프로모션상세 탭은 없어도(아직 안 만들었어도) 일정 표시 자체는 되도록 실패를 조용히 무시
+    let detailByName = {};
+    if(detailRes.ok){
+      try{ detailByName = parsePromoDetailCsv(await detailRes.text()); }catch(e){ /* 상세품목만 비워두고 계속 진행 */ }
+    }
+
+    // 헤더행 찾기: "프로모션명" 셀이 있는 행을 직접 탐색(시트 상단에 빈 행이 섞여도 안전)
     let headerRowIdx=-1, header=null;
-    for(let i=0;i<rows.length;i++){
-      if(rows[i].some(c=>c.trim()==='날짜')){ headerRowIdx=i; header=rows[i]; break; }
+    for(let i=0;i<csvRows.length;i++){
+      if(csvRows[i].some(c=>c.trim()==='프로모션명')){ headerRowIdx=i; header=csvRows[i]; break; }
     }
-    if(headerRowIdx<0) throw new Error('시트에서 "날짜" 헤더를 찾지 못했습니다(시트 구조가 바뀐 것 같습니다).');
+    if(headerRowIdx<0) throw new Error('시트에서 "프로모션명" 헤더를 찾지 못했습니다(헤더 행이 없거나 이름이 바뀐 것 같습니다).');
 
-    const idxDate  = header.findIndex(c=>c.trim()==='날짜');
-    const idxSpend = header.findIndex(c=>c.trim()==='지출 금액');
-    const idxTotal = header.findIndex(c=>c.trim()==='구매 총합');
-    const idxRatio = header.findIndex(c=>c.trim()==='매출 대비 광고비율');
-    const idxNote  = header.findIndex(c=>c.trim()==='메타 구매 광고');
+    const idxNo      = header.findIndex(c=>c.trim()==='No');
+    const idxName    = header.findIndex(c=>c.trim()==='프로모션명');
+    const idxStart   = header.findIndex(c=>c.trim()==='시작일');
+    const idxEnd     = header.findIndex(c=>c.trim()==='종료일');
+    const idxChannel = header.findIndex(c=>c.trim()==='대상채널');
+    const idxItems   = header.findIndex(c=>c.trim()==='대상 품목/카테고리');
+    const idxNote    = header.findIndex(c=>c.trim()==='비고');
 
-    const yearHint = new Date().getFullYear();
-    const byDate = {};
-    for(let i=headerRowIdx+1;i<rows.length;i++){
-      const r = rows[i];
-      if(!r || idxDate>=r.length) continue;
-      const dateRaw = (r[idxDate]||'').trim();
-      if(!dateRaw) continue;
-      const dt = parseKoreanMD(dateRaw, yearHint);
-      if(!dt) continue;
-      const key = fmtDate(dt);
-      byDate[key] = {
-        date: dt,
-        spend: toNum(r[idxSpend]),
-        total: idxTotal>=0 ? toNum(r[idxTotal]) : null,
-        ratio: idxRatio>=0 ? (r[idxRatio]||'').trim() : '',
+    const rows = [];
+    for(let i=headerRowIdx+1;i<csvRows.length;i++){
+      const r = csvRows[i];
+      if(!r || !r[idxName] || !r[idxName].trim()) continue; // 프로모션명 없는 빈 행은 건너뜀
+      const start = idxStart>=0 ? parseDate((r[idxStart]||'').trim()) : null;
+      const end   = idxEnd>=0   ? parseDate((r[idxEnd]||'').trim())   : null;
+      const itemsRaw = idxItems>=0 ? (r[idxItems]||'').trim() : '';
+      const name = r[idxName].trim();
+      const details = detailByName[name] || [];
+      // 품목수/예상매출은 시트에 직접 입력하지 않고, 프로모션상세(상품코드+수량)와 재고 마스터
+      // 가격을 조합해 대시보드가 매번 새로 계산함 - 가격이 바뀌어도 항상 최신 기준으로 보임.
+      let revenue = 0;
+      details.forEach(d=>{ const inv = state.invByCode[d.code]; if(inv) revenue += (inv.price||0) * (d.qty||0); });
+      rows.push({
+        no: idxNo>=0 ? (r[idxNo]||'').trim() : String(i),
+        name,
+        start, end,
+        channel: idxChannel>=0 ? (r[idxChannel]||'').trim() : '',
+        itemsRaw,
+        itemTokens: promoTokens(itemsRaw),
         note: idxNote>=0 ? (r[idxNote]||'').trim() : '',
-      };
+        itemCount: details.length,
+        revenue,
+      });
+    }
+    rows.forEach(r=>{ r.status = promoStatus(r); });
+
+    // 겹침 경고: 기간 + 대상품목 두 조건이 모두 겹치는 조합만 실제 충돌로 판단
+    const warnings = [];
+    const overlapNames = new Set();
+    for(let i=0;i<rows.length;i++){
+      for(let j=i+1;j<rows.length;j++){
+        if(!promoDateOverlap(rows[i],rows[j])) continue;
+        const common = promoItemOverlap(rows[i],rows[j]);
+        if(common.length===0) continue;
+        warnings.push({ a:rows[i], b:rows[j], common });
+        overlapNames.add(rows[i].name); overlapNames.add(rows[j].name);
+      }
     }
 
-    state.promo.byDate = byDate;
+    state.promo.rows = rows;
+    state.promo.warnings = warnings;
+    state.promo.overlapNames = overlapNames;
+    state.promo.detailByName = detailByName;
     state.promo.loaded = true;
-    if(!state.promo.cur){
-      // 데이터가 있는 가장 최근 달을 기본값으로 (데이터가 전혀 없으면 이번 달)
-      const keys = Object.keys(byDate).sort();
-      const lastDate = keys.length ? byDate[keys[keys.length-1]].date : new Date();
-      state.promo.cur = { y: lastDate.getFullYear(), m: lastDate.getMonth() };
-    }
     if(statusEl) statusEl.textContent = '';
-    renderPromoCalendar();
+    renderPromoAll();
   }catch(err){
     state.promo.loaded = false;
     if(statusEl) statusEl.textContent = '불러오지 못했습니다: ' + err.message;
-    if(calEl) calEl.innerHTML = '';
+    ['promo-cards','promo-warnList','promo-tbody'].forEach(id=>{ const el=document.getElementById(id); if(el) el.innerHTML=''; });
+    destroy('promo-ch-gantt');
   }
 }
 
-function renderPromoCalendar(){
-  const calEl = document.getElementById('promo-cal');
-  const labelEl = document.getElementById('promo-monthLabel');
-  if(!calEl || !state.promo.cur) return;
-  const {y,m} = state.promo.cur;
-  if(labelEl) labelEl.textContent = y+'년 '+(m+1)+'월';
+function renderPromoAll(){
+  renderPromoCards();
+  renderPromoGantt();
+  renderPromoWarnings();
+  renderPromoTable();
+}
 
-  const dowNames = ['일','월','화','수','목','금','토'];
-  let html = dowNames.map(n=>'<div class="promo-dow">'+n+'</div>').join('');
+function renderPromoCards(){
+  const el = document.getElementById('promo-cards');
+  if(!el) return;
+  const active = state.promo.rows.filter(r=>r.status==='진행중');
+  if(active.length===0){
+    el.innerHTML = '<div class="promo-empty-msg">오늘 진행중인 프로모션이 없습니다.</div>';
+    return;
+  }
+  el.innerHTML = active.map(r=>
+    '<div class="promo-card">'+
+      '<div class="p-name">'+escAttr(r.name)+'</div>'+
+      '<div class="p-period">'+fmtDate(r.start)+' ~ '+fmtDate(r.end)+(r.channel?' · '+escAttr(r.channel):'')+
+        (r.itemCount ? ' · 품목 '+r.itemCount+'종' : '')+'</div>'+
+      (r.note ? '<div class="p-note">'+escAttr(r.note)+'</div>' : '')+
+    '</div>'
+  ).join('');
+}
 
-  const first = new Date(y,m,1);
-  const firstDow = first.getDay();
-  const daysInMonth = new Date(y,m+1,0).getDate();
-  const todayKey = fmtDate(new Date());
-
-  for(let i=0;i<firstDow;i++) html += '<div class="promo-day empty"></div>';
-  for(let d=1; d<=daysInMonth; d++){
-    const dt = new Date(y,m,d);
-    const key = fmtDate(dt);
-    const rec = state.promo.byDate[key];
-    const isToday = key===todayKey;
-    const hasNote = !!(rec && rec.note);
-    let inner = '<div class="d-num">'+d+'</div>';
-    if(rec){
-      if(rec.spend) inner += '<div class="d-spend">지출 '+fmtNum(rec.spend)+'</div>';
-      if(rec.note) inner += '<div class="d-note">'+escAttr(rec.note).replace(/\n/g,'<br>')+'</div>';
+function renderPromoGantt(){
+  const rows = state.promo.rows.filter(r=>r.start && r.end);
+  if(rows.length===0){ destroy('promo-ch-gantt'); return; }
+  // 기준일(가장 이른 시작일)로부터 며칠째인지를 x값으로 사용(날짜축 어댑터 없이 floating bar 구현)
+  const refTime = Math.min.apply(null, rows.map(r=>r.start.getTime()));
+  const dayIdx = d => Math.round((d.getTime()-refTime)/86400000);
+  const labels = rows.map(r=>r.name);
+  const data = rows.map(r=>[dayIdx(r.start), dayIdx(r.end)+1]); // 종료일도 하루로 포함되도록 +1
+  const colors = rows.map(r=> state.promo.overlapNames.has(r.name) ? 'rgba(212,47,82,.75)' : 'rgba(44,75,184,.75)');
+  mk('promo-ch-gantt', {
+    type:'bar',
+    data:{ labels, datasets:[{ data, backgroundColor:colors, borderRadius:3, barPercentage:0.6 }] },
+    options:{
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{ callbacks:{
+        label:(ctx)=>{ const r=rows[ctx.dataIndex]; return fmtDate(r.start)+' ~ '+fmtDate(r.end)+(r.channel?' · '+r.channel:''); }
+      }}},
+      scales:{
+        x:{ ticks:{ callback:(v)=>{ const d=new Date(refTime+v*86400000); return (d.getMonth()+1)+'/'+d.getDate(); } }, grid:{color:'rgba(17,17,17,.06)'} },
+        y:{ grid:{display:false} }
+      }
     }
-    html += '<div class="promo-day'+(isToday?' today':'')+(hasNote?' has-note':'')+'">'+inner+'</div>';
-  }
-  calEl.innerHTML = html;
-
-  if(Object.keys(state.promo.byDate).length===0){
-    calEl.insertAdjacentHTML('beforeend','<div class="promo-empty-msg" style="grid-column:1/-1;">표시할 데이터가 없습니다.</div>');
-  }
+  });
 }
 
-document.getElementById('promo-prevBtn').addEventListener('click',()=>{
-  if(!state.promo.cur) return;
-  let {y,m}=state.promo.cur; m--; if(m<0){m=11;y--;}
-  state.promo.cur={y,m}; renderPromoCalendar();
+function renderPromoWarnings(){
+  const el = document.getElementById('promo-warnList');
+  if(!el) return;
+  const warnings = state.promo.warnings;
+  if(warnings.length===0){
+    el.innerHTML = '<div class="promo-empty-msg">겹치는 프로모션이 없습니다.</div>';
+    return;
+  }
+  el.innerHTML = warnings.map(w=>{
+    const overlapStart = w.a.start > w.b.start ? w.a.start : w.b.start;
+    const overlapEnd = w.a.end < w.b.end ? w.a.end : w.b.end;
+    return '<div class="promo-warn-item">⚠️ <b>'+escAttr(w.a.name)+'</b> ↔ <b>'+escAttr(w.b.name)+'</b> — '+
+      fmtDate(overlapStart)+' ~ '+fmtDate(overlapEnd)+' 기간에 <b>'+escAttr(w.common.join(', '))+'</b> 품목이 겹칩니다.</div>';
+  }).join('');
+}
+
+function renderPromoTable(){
+  const tbody = document.getElementById('promo-tbody');
+  const cnt = document.getElementById('promo-rowCount');
+  if(!tbody) return;
+  const rows = state.promo.rows;
+  if(cnt) cnt.textContent = rows.length+'건';
+  if(rows.length===0){ tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-tertiary);">데이터가 없습니다.</td></tr>'; return; }
+  const statusClass = s => s==='진행중' ? 'good' : s==='예정' ? 'info' : 'warn';
+  tbody.innerHTML = rows.map((r,i)=>
+    '<tr class="promo-row" data-promo-idx="'+i+'">'+
+      '<td>'+escAttr(r.no)+'</td>'+
+      '<td>'+escAttr(r.name)+' <span class="promo-expand-ic">▸</span></td>'+
+      '<td>'+fmtDate(r.start)+'</td>'+
+      '<td>'+fmtDate(r.end)+'</td>'+
+      '<td>'+escAttr(r.channel)+'</td>'+
+      '<td>'+escAttr(r.itemsRaw)+'</td>'+
+      '<td>'+(r.itemCount ? r.itemCount+'종' : '-')+'</td>'+
+      '<td>'+(r.revenue ? fmtNum(r.revenue) : '-')+'</td>'+
+      '<td><span class="badge '+statusClass(r.status)+'">'+escAttr(r.status)+'</span></td>'+
+      '<td>'+escAttr(r.note)+'</td>'+
+    '</tr>'
+  ).join('');
+}
+
+// 프로모션 원본 표 행 클릭 -> 프로모션상세 탭에서 가져온 SKU 목록을 아코디언으로 펼침
+// (한 번에 하나만 펼치도록 다른 상세행은 먼저 닫음). state.invByCode로 상품코드만 가지고
+// 상품명/브랜드/카테고리/성별/모델명/사이즈를 자동으로 채워 보여줌(마스터에 없는 코드는
+// 프로모션상세 시트에 직접 입력해둔 값을 대신 사용).
+document.getElementById('promo-tbody').addEventListener('click', e=>{
+  const tr = e.target.closest('tr.promo-row');
+  if(!tr) return;
+  const idx = Number(tr.dataset.promoIdx);
+  const promo = state.promo.rows[idx];
+  const already = tr.nextElementSibling && tr.nextElementSibling.classList.contains('promo-detail-row');
+  document.querySelectorAll('#promo-tbody .promo-detail-row').forEach(el=>el.remove());
+  document.querySelectorAll('#promo-tbody .promo-expand-ic').forEach(el=>el.textContent='▸');
+  if(already) return; // 이미 펼쳐져 있던 행을 다시 클릭한 것 -> 닫기만 하고 끝
+
+  const ic = tr.querySelector('.promo-expand-ic');
+  if(ic) ic.textContent = '▾';
+  const details = state.promo.detailByName[promo.name] || [];
+  let bodyHtml;
+  if(details.length===0){
+    bodyHtml = '<div class="promo-empty-msg">등록된 상세 품목이 없습니다("프로모션상세" 시트에 이 프로모션명으로 등록된 행이 없습니다).</div>';
+  }else{
+    const itemRows = details.map((d,k)=>{
+      const inv = state.invByCode[d.code];
+      return {
+        seq: d.seq || (k+1),
+        code: d.code,
+        name: inv ? inv.name : d.nameRaw,
+        brand: inv ? inv.brand : d.brandRaw,
+        category: inv ? inv.category : d.catRaw,
+        gender: inv ? inv.gender : d.genRaw,
+        model: inv ? inv.model : d.modelRaw,
+        color: d.colorRaw,
+        size: inv ? inv.size : d.sizeRaw,
+        qty: d.qty,
+      };
+    });
+    bodyHtml = '<div class="promo-detail-wrap"><table class="promo-detail-tbl"><thead><tr>'+
+      '<th>번호</th><th>상품코드</th><th>상품명</th><th>브랜드</th><th>카테고리</th><th>성별</th><th>모델명</th><th>컬러</th><th>사이즈</th><th>수량</th>'+
+      '</tr></thead><tbody>'+
+      itemRows.map(it=>'<tr><td>'+escAttr(it.seq)+'</td><td>'+escAttr(it.code)+'</td><td>'+escAttr(it.name)+'</td><td>'+escAttr(it.brand)+'</td><td>'+escAttr(it.category)+'</td><td>'+escAttr(it.gender)+'</td><td>'+escAttr(it.model)+'</td><td>'+escAttr(it.color)+'</td><td>'+escAttr(it.size)+'</td><td>'+fmtNum(it.qty)+'</td></tr>').join('')+
+      '</tbody></table></div>';
+  }
+  tr.insertAdjacentHTML('afterend', '<tr class="promo-detail-row"><td colspan="10">'+bodyHtml+'</td></tr>');
 });
-document.getElementById('promo-nextBtn').addEventListener('click',()=>{
-  if(!state.promo.cur) return;
-  let {y,m}=state.promo.cur; m++; if(m>11){m=0;y++;}
-  state.promo.cur={y,m}; renderPromoCalendar();
-});
+
 document.getElementById('promo-refreshBtn').addEventListener('click',()=>loadPromoSchedule());
 
 /* ════════════════════════════════════════════════════════
