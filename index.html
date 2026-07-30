@@ -158,6 +158,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
   border-radius:var(--radius-md);padding:12px 14px;}
 .promo-card .p-name{font-size:13.5px;font-weight:700;color:var(--text-primary);margin-bottom:4px;}
 .promo-card .p-period{font-size:11px;color:var(--text-tertiary);margin-bottom:6px;}
+.promo-card .p-revenue{font-size:12px;font-weight:600;color:var(--color-success-fg);margin-bottom:4px;}
 .promo-card .p-note{font-size:11.5px;color:var(--text-secondary);line-height:1.4;}
 .promo-warn-list{display:flex;flex-direction:column;gap:8px;}
 .promo-warn-item{background:rgba(212,47,82,.08);border:1px solid rgba(212,47,82,.25);border-radius:var(--radius-md);
@@ -1494,6 +1495,7 @@ async function loadPromoSchedule(){
     const idxChannel = header.findIndex(c=>c.trim()==='프로모션 채널');
     const idxBrand   = header.findIndex(c=>c.trim()==='브랜드'); // [2026-07-30] "대상 품목/카테고리"에서 "브랜드"로 개편됨
     const idxNote    = header.findIndex(c=>c.trim()==='비고');
+    const idxRevenue = header.findIndex(c=>c.trim()==='프로모션 매출금'); // 담당자가 직접 입력하는 매출 목표치
 
     // 상품코드 -> 화면에 보여줄 이름 (겹침 경고에 상품코드 대신 품명을 보여주기 위함).
     // 재고 마스터(state.invByCode)에 있으면 그 이름을, 없으면 프로모션상세에 직접 적힌 이름을 씀.
@@ -1527,6 +1529,7 @@ async function loadPromoSchedule(){
         note: idxNote>=0 ? (r[idxNote]||'').trim() : '',
         itemCount: details.length,
         revenue,
+        targetRevenue: idxRevenue>=0 ? toNum(r[idxRevenue]) : 0,
       });
     }
     rows.forEach(r=>{ r.status = promoStatus(r); });
@@ -1580,6 +1583,7 @@ function renderPromoCards(){
       '<div class="p-name">'+escAttr(r.name)+'</div>'+
       '<div class="p-period">'+fmtDate(r.start)+' ~ '+fmtDate(r.end)+(r.channel?' · '+escAttr(r.channel):'')+
         (r.itemCount ? ' · 품목 '+r.itemCount+'종' : '')+'</div>'+
+      (r.targetRevenue ? '<div class="p-revenue">매출목표 '+fmtNum(r.targetRevenue)+'원</div>' : '')+
       (r.note ? '<div class="p-note">'+escAttr(r.note)+'</div>' : '')+
     '</div>'
   ).join('');
