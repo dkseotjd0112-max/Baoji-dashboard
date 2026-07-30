@@ -225,7 +225,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
 .promo-memo-list{flex:1 1 auto;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:6px;}
 .promo-memo-bubble{background:rgba(44,75,184,.08);border:1px solid rgba(44,75,184,.16);
   border-radius:var(--radius-md);padding:7px 10px;font-size:12.5px;line-height:1.45;
-  color:var(--text-primary);white-space:pre-wrap;word-break:break-word;}
+  color:var(--text-primary);white-space:pre-wrap;word-break:break-word;} /* 기본값(계정색 인라인스타일이 덮어씀) */
 .promo-memo-bubble-meta{font-size:10px;color:var(--text-tertiary);margin-top:3px;text-align:right;}
 .promo-memo-empty{font-size:11.5px;color:var(--text-tertiary);text-align:center;padding:18px 0;}
 .promo-memo-inputRow{flex:0 0 auto;display:flex;align-items:flex-end;gap:8px;margin-top:8px;}
@@ -237,6 +237,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
 .promo-memo-exportBtn{font:600 11px/1 'Pretendard',sans-serif;border:1px solid var(--border-default);
   background:transparent;color:var(--text-secondary);border-radius:var(--radius-full);padding:6px 10px;cursor:pointer;}
 .promo-memo-exportBtn:hover{border-color:var(--border-strong);color:var(--text-primary);}
+.promo-memo-countdown{font-size:10.5px;color:var(--text-tertiary);white-space:nowrap;}
 .promo-memo-status{font-size:11.5px;color:var(--text-tertiary);}
 .promo-memo-status.is-error{color:var(--color-error-fg);}
 .promo-memo-status.is-ok{color:var(--color-success-fg);}
@@ -538,6 +539,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
           </div>
           <div class="promo-memo-actions">
             <button type="button" class="promo-memo-exportBtn" id="promo-memoExportBtn">메모장으로 내보내기</button>
+            <span class="promo-memo-countdown" id="promo-memoCountdown" title="다른 사람이 남긴 메모를 자동으로 확인하기까지 남은 시간">-</span>
             <span class="promo-memo-status" id="promo-memoStatus"></span>
           </div>
         </div>
@@ -1991,6 +1993,24 @@ function renderPromoMemoInfo(){
   infoEl.textContent = '총 '+entries.length+'건 · 최근 '+fmtMemoTime(last.ts);
 }
 
+// [2026-07-30 추가] 계정(idoogen1/idoogen2 등)마다 말풍선 색을 다르게 고정 배정 - 문자열을
+// 간단한 해시값으로 바꿔 팔레트 인덱스를 정하므로, 같은 계정은 항상 같은 색이고 계정이 늘어나도
+// (idoogen3, idoogen4...) 코드 수정 없이 자동으로 팔레트를 돌려가며 배정됨.
+const PROMO_MEMO_AUTHOR_PALETTE = [
+  {bg:'rgba(44,75,184,.10)',  border:'rgba(44,75,184,.24)'},  // 파랑
+  {bg:'rgba(21,150,120,.10)', border:'rgba(21,150,120,.24)'}, // 초록
+  {bg:'rgba(214,130,30,.10)', border:'rgba(214,130,30,.24)'}, // 주황
+  {bg:'rgba(130,80,200,.10)', border:'rgba(130,80,200,.24)'}, // 보라
+  {bg:'rgba(190,90,140,.10)', border:'rgba(190,90,140,.24)'}, // 분홍
+  {bg:'rgba(90,140,40,.10)',  border:'rgba(90,140,40,.24)'},  // 올리브
+];
+function promoMemoAuthorColor(author){
+  const s = String(author||'');
+  let h = 0;
+  for(let i=0;i<s.length;i++){ h = (h*31 + s.charCodeAt(i)) >>> 0; }
+  return PROMO_MEMO_AUTHOR_PALETTE[h % PROMO_MEMO_AUTHOR_PALETTE.length];
+}
+
 function renderPromoMemoList(){
   const listEl = document.getElementById('promo-memoList');
   if(!listEl) return;
@@ -1998,17 +2018,27 @@ function renderPromoMemoList(){
   if(!entries.length){
     listEl.innerHTML = '<div class="promo-memo-empty">등록된 메모가 없습니다.</div>';
   }else{
-    listEl.innerHTML = entries.map(en=>
-      '<div class="promo-memo-bubble">'+escAttr(en.text)+
+    listEl.innerHTML = entries.map(en=>{
+      const c = promoMemoAuthorColor(en.author);
+      return '<div class="promo-memo-bubble" style="background:'+c.bg+';border-color:'+c.border+';">'+escAttr(en.text)+
         '<div class="promo-memo-bubble-meta">'+escAttr(en.author||'')+' · '+fmtMemoTime(en.ts, true)+'</div>'+
-      '</div>'
-    ).join('');
+      '</div>';
+    }).join('');
   }
   renderPromoMemoInfo();
   listEl.scrollTop = listEl.scrollHeight; // 카톡처럼 항상 최신 메모가 보이도록 맨 아래로 스크롤
 }
 
-async function loadPromoMemo(){
+// 목록이 실제로 바뀌었는지 판단하는 지문(건수+마지막 시각+마지막 글자수) - 10초마다 폴링할 때
+// 내용이 그대로면 다시 그리지 않기 위함. 매번 innerHTML을 새로 쓰면 사용자가 위로 올려둔
+// 스크롤이 강제로 맨 아래로 튕기고 텍스트 선택도 풀려서, 읽는 중에 방해가 됨.
+function promoMemoSig(entries){
+  if(!entries.length) return '0';
+  const last = entries[entries.length-1];
+  return entries.length+'|'+last.ts+'|'+(last.text||'').length;
+}
+
+async function loadPromoMemo(silent){
   const statusEl = document.getElementById('promo-memoStatus');
   const listEl = document.getElementById('promo-memoList');
   if(!listEl) return;
@@ -2016,13 +2046,40 @@ async function loadPromoMemo(){
     const res = await fetch(PROMO_MEMO_ENDPOINT + '?t=' + Date.now());
     const j = await res.json();
     if(!res.ok || !j.ok) throw new Error((j&&j.message) || ('HTTP '+res.status));
-    state.promo.memoEntries = Array.isArray(j.entries) ? j.entries : [];
-    renderPromoMemoList();
+    const next = Array.isArray(j.entries) ? j.entries : [];
+    const changed = promoMemoSig(next) !== promoMemoSig(state.promo.memoEntries);
+    state.promo.memoEntries = next;
+    if(changed || !silent) renderPromoMemoList();
     if(statusEl){ statusEl.textContent=''; statusEl.className='promo-memo-status'; }
   }catch(e){
-    if(statusEl){ statusEl.textContent='메모를 불러오지 못했습니다: '+e.message; statusEl.className='promo-memo-status is-error'; }
+    // 자동 폴링 실패는 조용히 넘김(순간적인 네트워크 문제로 빨간 오류문구가 계속 깜빡이면
+    // 오히려 방해가 되고, 다음 10초 뒤에 자동으로 다시 시도되므로).
+    if(!silent && statusEl){ statusEl.textContent='메모를 불러오지 못했습니다: '+e.message; statusEl.className='promo-memo-status is-error'; }
   }
 }
+
+// [2026-07-30 추가] 10초마다 자동으로 새 메모를 확인해서 채팅처럼 쓸 수 있게 함 + 다음 갱신까지
+// 남은 시간을 초 단위로 표시. 프로모션 탭을 실제로 보고 있을 때만 폴링함(다른 탭을 보거나 브라우저
+// 창이 백그라운드면 멈춤) - KV 무료 한도(하루 읽기 10만 회)를 불필요하게 쓰지 않기 위함.
+const PROMO_MEMO_POLL_SEC = 10;
+let promoMemoCountdown = PROMO_MEMO_POLL_SEC;
+function promoMemoTick(){
+  const cdEl = document.getElementById('promo-memoCountdown');
+  const view = document.getElementById('view-promo');
+  const watching = view && view.classList.contains('on') && !document.hidden;
+  if(!watching){
+    promoMemoCountdown = PROMO_MEMO_POLL_SEC;
+    if(cdEl) cdEl.textContent = '자동갱신 대기';
+    return;
+  }
+  promoMemoCountdown--;
+  if(promoMemoCountdown <= 0){
+    promoMemoCountdown = PROMO_MEMO_POLL_SEC;
+    loadPromoMemo(true);
+  }
+  if(cdEl) cdEl.textContent = promoMemoCountdown + '초 후 갱신';
+}
+setInterval(promoMemoTick, 1000);
 
 async function addPromoMemo(){
   const btn = document.getElementById('promo-memoAddBtn');
@@ -2044,6 +2101,7 @@ async function addPromoMemo(){
     state.promo.memoEntries = Array.isArray(j.entries) ? j.entries : [];
     renderPromoMemoList();
     inputEl.value = '';
+    promoMemoCountdown = PROMO_MEMO_POLL_SEC; // 방금 최신 목록을 받았으므로 카운트다운을 다시 처음부터
     if(statusEl){ statusEl.textContent=''; statusEl.className='promo-memo-status'; }
   }catch(e){
     if(statusEl){ statusEl.textContent='등록 실패: '+e.message; statusEl.className='promo-memo-status is-error'; }
