@@ -159,6 +159,24 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
 .promo-card .p-name{font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:2px;}
 .promo-card .p-period{font-size:11px;color:var(--text-tertiary);}
 .promo-card .p-note{font-size:11px;color:var(--text-secondary);line-height:1.3;margin-top:2px;}
+.promo-top-row{display:flex;gap:14px;align-items:stretch;}
+.promo-top-row .promo-cal-col{flex:1.6;min-width:0;}
+.promo-top-row .promo-active-col{flex:1;min-width:220px;display:flex;flex-direction:column;}
+.promo-top-row .promo-active-col .promo-cards{flex-wrap:wrap;}
+@media (max-width:900px){ .promo-top-row{flex-direction:column;} }
+.promo-cal-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.promo-cal-head h3{margin:0;min-width:110px;text-align:center;}
+.promo-cal-nav{width:26px;height:26px;border:1px solid var(--border-default);background:var(--bg-elevated);border-radius:var(--radius-sm);
+  font-size:14px;line-height:1;cursor:pointer;color:var(--text-secondary);}
+.promo-cal-nav:hover{border-color:var(--border-strong);color:var(--text-primary);}
+.promo-cal-dow{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-size:11px;color:var(--text-tertiary);margin-bottom:4px;}
+.promo-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+.promo-cal-cell{min-height:64px;border:1px solid var(--border-default);border-radius:var(--radius-sm);padding:4px 5px;background:var(--bg-elevated);}
+.promo-cal-cell.is-empty{background:transparent;border-color:transparent;}
+.promo-cal-cell.is-today{border-color:var(--color-accent-fg,#2c4bb8);border-width:2px;}
+.promo-cal-daynum{font-size:11px;color:var(--text-tertiary);margin-bottom:3px;}
+.promo-cal-pill{font-size:10px;color:#fff;border-radius:4px;padding:1px 5px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.promo-cal-more{font-size:10px;color:var(--text-tertiary);}
 .promo-warn-list{display:flex;flex-direction:column;gap:8px;}
 .promo-warn-item{background:rgba(212,47,82,.08);border:1px solid rgba(212,47,82,.25);border-radius:var(--radius-md);
   padding:10px 14px;font-size:12.5px;color:var(--text-primary);line-height:1.5;}
@@ -430,15 +448,30 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
 
     <!-- ══════════════════ 프로모션 일정 ══════════════════ -->
     <div class="view" id="view-promo">
-      <section class="section card" style="padding-bottom:12px;">
-        <div class="table-head">
-          <h3>지금 진행중인 프로모션</h3>
-          <button type="button" class="promo-refresh" id="promo-refreshBtn">새로고침</button>
-        </div>
-        <p class="q" style="margin-bottom:8px;">구글시트 "프로모션일정" 탭 기준, 오늘 날짜가 시작일~종료일 사이인 항목만 표시합니다.</p>
-        <div class="promo-status" id="promo-status">불러오는 중…</div>
-        <div class="promo-cards" id="promo-cards"></div>
-      </section>
+      <div class="promo-top-row">
+        <section class="section card promo-cal-col">
+          <div class="promo-cal-head">
+            <button type="button" class="promo-cal-nav" id="promo-calPrev" aria-label="이전 달">‹</button>
+            <h3 id="promo-calLabel">-</h3>
+            <button type="button" class="promo-cal-nav" id="promo-calNext" aria-label="다음 달">›</button>
+            <button type="button" class="promo-refresh" id="promo-calTodayBtn" style="margin-left:8px;">오늘</button>
+          </div>
+          <div class="promo-cal-dow">
+            <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+          </div>
+          <div class="promo-cal-grid" id="promo-calGrid"></div>
+        </section>
+
+        <section class="section card promo-active-col" style="padding-bottom:12px;">
+          <div class="table-head">
+            <h3>지금 진행중인 프로모션</h3>
+            <button type="button" class="promo-refresh" id="promo-refreshBtn">새로고침</button>
+          </div>
+          <p class="q" style="margin-bottom:8px;">구글시트 "프로모션일정" 탭 기준, 오늘 날짜가 시작일~종료일 사이인 항목만 표시합니다.</p>
+          <div class="promo-status" id="promo-status">불러오는 중…</div>
+          <div class="promo-cards" id="promo-cards"></div>
+        </section>
+      </div>
 
       <section class="section card">
         <h3>일정 타임라인</h3>
@@ -488,7 +521,7 @@ const state = {
   ordFilters:{brand:'ALL',category:'ALL',model:'ALL',channel:'ALL',type:'ALL',gender:'ALL'}, ordSearch:'', ordSort:{col:'date',dir:-1}, ordDrills:[],
   ordPeriod:{preset:'last1m', from:'', to:''}, ordMetric:'qty',
   charts:{}, refreshTimer:null, openMsel:null,
-  promo:{rows:[], warnings:[], detailByName:{}, loaded:false},
+  promo:{rows:[], warnings:[], detailByName:{}, loaded:false, calYear:new Date().getFullYear(), calMonth:new Date().getMonth()},
   invByCode:{},
 };
 
@@ -1378,6 +1411,19 @@ const PROMO_ENDPOINT = '/api/promo-schedule';
 // state.invByCode(재고 마스터)를 조회해 대시보드가 자동으로 채워서 보여줌).
 const PROMO_DETAIL_ENDPOINT = '/api/promo-detail';
 
+// [2026-07-30 추가] 타임라인(간트)과 달력 뷰가 같은 프로모션에 같은 색을 쓰도록 공유하는 팔레트/맵
+const PROMO_PALETTE = [
+  'rgba(44,75,184,.85)','rgba(21,150,120,.85)','rgba(214,130,30,.85)','rgba(130,80,200,.85)',
+  'rgba(30,150,190,.85)','rgba(190,90,140,.85)','rgba(90,140,40,.85)','rgba(180,110,40,.85)',
+  'rgba(70,100,220,.85)','rgba(150,150,40,.85)',
+];
+function getPromoColorMap(){
+  const rows = state.promo.rows.filter(r=>r.start && r.end);
+  const map = {};
+  rows.forEach((r,i)=>{ map[r.name] = PROMO_PALETTE[i % PROMO_PALETTE.length]; });
+  return map;
+}
+
 // 따옴표로 감싼 필드(콤마 포함 숫자 등)를 정확히 처리하는 최소 CSV 파서
 function parseCsvText(text){
   const rows=[]; let row=[]; let field=''; let inQ=false;
@@ -1570,6 +1616,7 @@ async function loadPromoSchedule(){
 function renderPromoAll(){
   renderPromoCards();
   renderPromoGantt();
+  renderPromoCalendar();
   renderPromoWarnings();
   renderPromoTable();
 }
@@ -1605,12 +1652,9 @@ function renderPromoGantt(){
   const data = rows.map(r=>[dayIdx(r.start), dayIdx(r.end)+1]); // 종료일도 하루로 포함되도록 +1
   // [2026-07-30 수정] 겹침 여부(빨강/파랑 2색)만으로 구분하던 걸 프로모션마다 서로 다른 색으로
   // 바꿈 - 겹침 표시는 색 대신 빨간 테두리로 옮겨서 두 요구를 같이 만족시킴(겹침 경고 목록도 별도로 있음).
-  const PROMO_PALETTE = [
-    'rgba(44,75,184,.78)','rgba(21,150,120,.78)','rgba(214,130,30,.78)','rgba(130,80,200,.78)',
-    'rgba(30,150,190,.78)','rgba(190,90,140,.78)','rgba(90,140,40,.78)','rgba(180,110,40,.78)',
-    'rgba(70,100,220,.78)','rgba(150,150,40,.78)',
-  ];
-  const colors = rows.map((r,i)=> PROMO_PALETTE[i % PROMO_PALETTE.length]);
+  // 색은 getPromoColorMap()으로 통일해서 아래 달력 뷰와 같은 프로모션은 항상 같은 색을 씀.
+  const colorMap = getPromoColorMap();
+  const colors = rows.map(r=> colorMap[r.name]);
   const borderColors = rows.map(r=> state.promo.overlapNames.has(r.name) ? 'rgba(212,47,82,1)' : 'transparent');
 
   // [2026-07-30 추가] 막대 안에 프로모션 채널 텍스트를 그려 넣는 전용 플러그인.
@@ -1675,6 +1719,46 @@ function renderPromoWarnings(){
     return '<div class="promo-warn-item">⚠️ <b>'+escAttr(w.a.name)+'</b> ↔ <b>'+escAttr(w.b.name)+'</b> — '+
       fmtDate(overlapStart)+' ~ '+fmtDate(overlapEnd)+' 기간에 <b>'+escAttr(w.common.join(', '))+'</b> 품목이 겹칩니다.</div>';
   }).join('');
+}
+
+// [2026-07-30 추가] 월간 달력 뷰 - 간트차트만으로는 "이 날 뭐가 겹치나"를 한눈에 보기 어렵다는
+// 요청으로 추가함. 같은 프로모션은 간트차트와 같은 색(getPromoColorMap)을 쓰고, 겹침 경고에 해당하는
+// 프로모션은 빨간 테두리를 줌. 한 칸에 너무 많으면(4개 초과) "+N개 더"로 줄여서 칸이 무한정 커지지 않게 함.
+function renderPromoCalendar(){
+  const grid = document.getElementById('promo-calGrid');
+  const label = document.getElementById('promo-calLabel');
+  if(!grid || !label) return;
+  const y = state.promo.calYear, m = state.promo.calMonth; // m은 0=1월
+  label.textContent = y+'년 '+(m+1)+'월';
+
+  const rows = state.promo.rows.filter(r=>r.start && r.end);
+  const colorMap = getPromoColorMap();
+  const today = new Date(); today.setHours(0,0,0,0);
+  const firstDow = new Date(y,m,1).getDay(); // 0=일요일
+  const daysInMonth = new Date(y,m+1,0).getDate();
+
+  let html = '';
+  for(let i=0;i<firstDow;i++) html += '<div class="promo-cal-cell is-empty"></div>';
+  for(let d=1; d<=daysInMonth; d++){
+    const cellDate = new Date(y,m,d);
+    const isToday = cellDate.getTime()===today.getTime();
+    const matches = rows.filter(r=>{
+      const s = new Date(r.start); s.setHours(0,0,0,0);
+      const e = new Date(r.end); e.setHours(0,0,0,0);
+      return s<=cellDate && cellDate<=e;
+    });
+    const maxShow = 4;
+    const pills = matches.slice(0,maxShow).map(r=>{
+      const overlap = state.promo.overlapNames.has(r.name);
+      const style = 'background:'+colorMap[r.name]+(overlap ? ';outline:2px solid rgba(212,47,82,1);outline-offset:-2px;' : '');
+      return '<div class="promo-cal-pill" style="'+style+'" title="'+escAttr(r.name)+(r.channel?' · '+escAttr(r.channel):'')+'">'+escAttr(r.name)+'</div>';
+    }).join('');
+    const more = matches.length>maxShow ? '<div class="promo-cal-more">+'+(matches.length-maxShow)+'개 더</div>' : '';
+    html += '<div class="promo-cal-cell'+(isToday?' is-today':'')+'">'+
+      '<div class="promo-cal-daynum">'+d+'</div>'+pills+more+
+    '</div>';
+  }
+  grid.innerHTML = html;
 }
 
 function renderPromoTable(){
@@ -1747,6 +1831,25 @@ document.getElementById('promo-tbody').addEventListener('click', e=>{
 });
 
 document.getElementById('promo-refreshBtn').addEventListener('click',()=>loadPromoSchedule());
+
+// [2026-07-30 추가] 달력 이전달/다음달/오늘 버튼 - 데이터를 다시 불러올 필요 없이 이미 가진
+// state.promo.rows로 그 달만 다시 그림(월 이동은 재조회 없이 즉시 반응하도록).
+document.getElementById('promo-calPrev').addEventListener('click',()=>{
+  state.promo.calMonth--;
+  if(state.promo.calMonth<0){ state.promo.calMonth=11; state.promo.calYear--; }
+  renderPromoCalendar();
+});
+document.getElementById('promo-calNext').addEventListener('click',()=>{
+  state.promo.calMonth++;
+  if(state.promo.calMonth>11){ state.promo.calMonth=0; state.promo.calYear++; }
+  renderPromoCalendar();
+});
+document.getElementById('promo-calTodayBtn').addEventListener('click',()=>{
+  const now = new Date();
+  state.promo.calYear = now.getFullYear();
+  state.promo.calMonth = now.getMonth();
+  renderPromoCalendar();
+});
 
 /* ════════════════════════════════════════════════════════
    탭 전환 / 파일 입력 / 부팅
