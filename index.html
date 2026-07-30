@@ -155,11 +155,10 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
 .promo-refresh:hover{border-color:var(--border-strong);color:var(--text-primary);}
 .promo-cards{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:4px;}
 .promo-card{flex:1;min-width:200px;background:var(--bg-elevated);border:1px solid var(--border-default);border-left:3px solid var(--color-success-fg);
-  border-radius:var(--radius-md);padding:12px 14px;}
-.promo-card .p-name{font-size:13.5px;font-weight:700;color:var(--text-primary);margin-bottom:4px;}
-.promo-card .p-period{font-size:11px;color:var(--text-tertiary);margin-bottom:6px;}
-.promo-card .p-revenue{font-size:12px;font-weight:600;color:var(--color-success-fg);margin-bottom:4px;}
-.promo-card .p-note{font-size:11.5px;color:var(--text-secondary);line-height:1.4;}
+  border-radius:var(--radius-md);padding:8px 12px;}
+.promo-card .p-name{font-size:13px;font-weight:700;color:var(--text-primary);margin-bottom:2px;}
+.promo-card .p-period{font-size:11px;color:var(--text-tertiary);}
+.promo-card .p-note{font-size:11px;color:var(--text-secondary);line-height:1.3;margin-top:2px;}
 .promo-warn-list{display:flex;flex-direction:column;gap:8px;}
 .promo-warn-item{background:rgba(212,47,82,.08);border:1px solid rgba(212,47,82,.25);border-radius:var(--radius-md);
   padding:10px 14px;font-size:12.5px;color:var(--text-primary);line-height:1.5;}
@@ -431,19 +430,18 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
 
     <!-- ══════════════════ 프로모션 일정 ══════════════════ -->
     <div class="view" id="view-promo">
-      <section class="section card">
+      <section class="section card" style="padding-bottom:12px;">
         <div class="table-head">
           <h3>지금 진행중인 프로모션</h3>
           <button type="button" class="promo-refresh" id="promo-refreshBtn">새로고침</button>
         </div>
-        <p class="q">구글시트 "프로모션일정" 탭 기준, 오늘 날짜가 시작일~종료일 사이인 항목만 표시합니다.</p>
+        <p class="q" style="margin-bottom:8px;">구글시트 "프로모션일정" 탭 기준, 오늘 날짜가 시작일~종료일 사이인 항목만 표시합니다.</p>
         <div class="promo-status" id="promo-status">불러오는 중…</div>
         <div class="promo-cards" id="promo-cards"></div>
       </section>
 
       <section class="section card">
         <h3>일정 타임라인</h3>
-        <p class="q">프로모션별 기간을 막대로 표시합니다. 막대가 가로로 겹치면 그 기간에 두 프로모션이 동시에 진행된다는 뜻입니다. 빨간 막대는 아래 "겹침 경고"에 해당하는 항목입니다.</p>
         <div class="chart-box" id="promo-ganttBox" style="height:260px;"><canvas id="promo-ch-gantt"></canvas></div>
       </section>
 
@@ -1584,12 +1582,14 @@ function renderPromoCards(){
     el.innerHTML = '<div class="promo-empty-msg">오늘 진행중인 프로모션이 없습니다.</div>';
     return;
   }
+  // [2026-07-30 수정] 시트의 "프로모션 매출금"은 담당자가 그날그날 수기로 넣는 당일 매출이라
+  // "매출목표"라는 이름으로 보여준 게 잘못이었음 - 오해 소지가 있어 카드에서는 뺌(원본 표에서는
+  // 여전히 계산해서 볼 수 있음. 표의 "예상매출"은 이것과 다른, SKU 완판 가정 자동계산 값).
   el.innerHTML = active.map(r=>
     '<div class="promo-card">'+
       '<div class="p-name">'+escAttr(r.name)+'</div>'+
       '<div class="p-period">'+fmtDate(r.start)+' ~ '+fmtDate(r.end)+(r.channel?' · '+escAttr(r.channel):'')+
         (r.itemCount ? ' · 품목 '+r.itemCount+'종' : '')+'</div>'+
-      (r.targetRevenue ? '<div class="p-revenue">매출목표 '+fmtNum(r.targetRevenue)+'원</div>' : '')+
       (r.note ? '<div class="p-note">'+escAttr(r.note)+'</div>' : '')+
     '</div>'
   ).join('');
@@ -1603,7 +1603,15 @@ function renderPromoGantt(){
   const dayIdx = d => Math.round((d.getTime()-refTime)/86400000);
   const labels = rows.map(r=>r.name);
   const data = rows.map(r=>[dayIdx(r.start), dayIdx(r.end)+1]); // 종료일도 하루로 포함되도록 +1
-  const colors = rows.map(r=> state.promo.overlapNames.has(r.name) ? 'rgba(212,47,82,.75)' : 'rgba(44,75,184,.75)');
+  // [2026-07-30 수정] 겹침 여부(빨강/파랑 2색)만으로 구분하던 걸 프로모션마다 서로 다른 색으로
+  // 바꿈 - 겹침 표시는 색 대신 빨간 테두리로 옮겨서 두 요구를 같이 만족시킴(겹침 경고 목록도 별도로 있음).
+  const PROMO_PALETTE = [
+    'rgba(44,75,184,.78)','rgba(21,150,120,.78)','rgba(214,130,30,.78)','rgba(130,80,200,.78)',
+    'rgba(30,150,190,.78)','rgba(190,90,140,.78)','rgba(90,140,40,.78)','rgba(180,110,40,.78)',
+    'rgba(70,100,220,.78)','rgba(150,150,40,.78)',
+  ];
+  const colors = rows.map((r,i)=> PROMO_PALETTE[i % PROMO_PALETTE.length]);
+  const borderColors = rows.map(r=> state.promo.overlapNames.has(r.name) ? 'rgba(212,47,82,1)' : 'transparent');
 
   // [2026-07-30 추가] 막대 안에 프로모션 채널 텍스트를 그려 넣는 전용 플러그인.
   // 막대 폭보다 텍스트가 길면(채널명이 길거나 기간이 짧으면) 겹쳐 보이지 않도록 생략함.
@@ -1638,7 +1646,7 @@ function renderPromoGantt(){
 
   mk('promo-ch-gantt', {
     type:'bar',
-    data:{ labels, datasets:[{ data, backgroundColor:colors, borderRadius:3, barPercentage:0.6 }] },
+    data:{ labels, datasets:[{ data, backgroundColor:colors, borderColor:borderColors, borderWidth:2, borderRadius:3, barPercentage:0.6 }] },
     plugins:[channelLabelPlugin],
     options:{
       indexAxis:'y', responsive:true, maintainAspectRatio:false,
