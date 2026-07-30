@@ -197,6 +197,16 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
 .promo-detail-tbl th{position:sticky;top:0;background:var(--bg-base);text-align:left;padding:6px 8px;color:var(--text-tertiary);font-weight:600;border-bottom:1px solid var(--border-default);white-space:nowrap;}
 .promo-detail-tbl td{padding:5px 8px;border-bottom:1px solid var(--border-default);color:var(--text-primary);white-space:nowrap;}
 
+/* [2026-07-30 추가] 프로모션 일정 화면 공유 메모(모두가 같이 보는 KV 저장 메모) */
+.promo-memo-textarea{width:100%;min-height:80px;resize:vertical;background:rgba(17,17,17,.04);
+  border:1px solid var(--border-default);border-radius:var(--radius-md);padding:10px 14px;
+  color:var(--text-primary);font:400 13px/1.5 'Pretendard',sans-serif;box-sizing:border-box;}
+.promo-memo-textarea:focus{outline:none;border-color:var(--border-strong);}
+.promo-memo-actions{display:flex;align-items:center;gap:10px;margin-top:10px;}
+.promo-memo-status{font-size:11.5px;color:var(--text-tertiary);}
+.promo-memo-status.is-error{color:var(--color-error-fg);}
+.promo-memo-status.is-ok{color:var(--color-success-fg);}
+
 .ai-box{background:var(--bg-elevated);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:18px;}
 .ai-box h3{margin:0 0 4px;font-size:15px;font-weight:700;}
 .ai-box .q{font-size:11px;color:var(--text-tertiary);margin:0 0 14px;}
@@ -478,6 +488,19 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
           <div class="promo-cards" id="promo-cards"></div>
         </section>
       </div>
+
+      <section class="section card">
+        <div class="table-head">
+          <h3>메모</h3>
+          <span class="row-count" id="promo-memoInfo"></span>
+        </div>
+        <p class="q">로그인한 모든 사람이 같은 메모를 보고 수정합니다. 저장하면 이전 내용을 덮어씁니다.</p>
+        <textarea id="promo-memoText" class="promo-memo-textarea" placeholder="예: 8월 신제품 런칭 재고 확인 필요, 담당자 변경 예정 등 팀과 공유할 내용을 적어주세요."></textarea>
+        <div class="promo-memo-actions">
+          <button type="button" class="promo-refresh" id="promo-memoSaveBtn">저장</button>
+          <span class="promo-memo-status" id="promo-memoStatus"></span>
+        </div>
+      </section>
 
       <section class="section card">
         <h3>일정 타임라인</h3>
@@ -1416,6 +1439,9 @@ const PROMO_ENDPOINT = '/api/promo-schedule';
 // 프로모션수량만 입력하면, 나머지(상품명/브랜드/카테고리/성별/모델명/사이즈)는 상품코드로
 // state.invByCode(재고 마스터)를 조회해 대시보드가 자동으로 채워서 보여줌).
 const PROMO_DETAIL_ENDPOINT = '/api/promo-detail';
+// [2026-07-30 추가] 프로모션 일정 화면 공유 메모 - 로그인한 모든 사람이 같은 내용을 보고
+// 고침(개인 브라우저 저장이 아니라 worker.js가 KV에 저장하는 서버 값). worker.js 주석 참고.
+const PROMO_MEMO_ENDPOINT = '/api/promo-memo';
 
 // [2026-07-30 추가] 타임라인(간트)과 달력 뷰가 같은 프로모션에 같은 색을 쓰도록 공유하는 팔레트/맵
 const PROMO_PALETTE = [
@@ -1551,7 +1577,11 @@ async function loadPromoSchedule(){
     const idxChannel = header.findIndex(c=>c.trim()==='프로모션 채널');
     const idxBrand   = header.findIndex(c=>c.trim()==='브랜드'); // [2026-07-30] "대상 품목/카테고리"에서 "브랜드"로 개편됨
     const idxNote    = header.findIndex(c=>c.trim()==='비고');
-    const idxRevenue = header.findIndex(c=>c.trim()==='프로모션 매출금'); // 담당자가 직접 입력하는 매출 목표치
+    // [2026-07-30 정정] 이 값은 "매출 목표"가 아니라 "오늘 날짜 기준 실제 매출액"을 담당자가
+    // 매일 수기로 갱신해서 넣는 값입니다(목표치 아님 - 예상매출 컬럼이 재고 전량 판매 가정의
+    // 목표/예상치이고, 이 값은 그와 별개인 하루치 실적). 현재는 원본 테이블에만 참고용으로
+    // 계산해두고 카드/상단에는 표시하지 않습니다(과거에 "매출목표"로 잘못 표시했다가 삭제함).
+    const idxRevenue = header.findIndex(c=>c.trim()==='프로모션 매출금');
 
     // 상품코드 -> 화면에 보여줄 이름 (겹침 경고에 상품코드 대신 품명을 보여주기 위함).
     // 재고 마스터(state.invByCode)에 있으면 그 이름을, 없으면 프로모션상세에 직접 적힌 이름을 씀.
@@ -1585,7 +1615,7 @@ async function loadPromoSchedule(){
         note: idxNote>=0 ? (r[idxNote]||'').trim() : '',
         itemCount: details.length,
         revenue,
-        targetRevenue: idxRevenue>=0 ? toNum(r[idxRevenue]) : 0,
+        dailyRevenue: idxRevenue>=0 ? toNum(r[idxRevenue]) : 0, // 오늘자 실제매출(수기입력) - 목표 아님
       });
     }
     rows.forEach(r=>{ r.status = promoStatus(r); });
@@ -1892,6 +1922,56 @@ document.getElementById('promo-tbody').addEventListener('click', e=>{
 
 document.getElementById('promo-refreshBtn').addEventListener('click',()=>loadPromoSchedule());
 
+// [2026-07-30 추가] 프로모션 일정 화면 공유 메모 - 로그인한 모든 사람이 같은 내용을 보고 고침
+// (worker.js가 KV(dashboard-users)에 저장/조회함, 브라우저 저장이 아니므로 다른 컴퓨터에서도 동일하게 보임).
+function fmtMemoTime(ts){
+  if(!ts) return '';
+  const d = new Date(ts);
+  const p = n=>String(n).padStart(2,'0');
+  return (d.getMonth()+1)+'/'+d.getDate()+' '+p(d.getHours())+':'+p(d.getMinutes());
+}
+async function loadPromoMemo(){
+  const infoEl = document.getElementById('promo-memoInfo');
+  const statusEl = document.getElementById('promo-memoStatus');
+  const textEl = document.getElementById('promo-memoText');
+  if(!textEl) return;
+  try{
+    const res = await fetch(PROMO_MEMO_ENDPOINT + '?t=' + Date.now());
+    const j = await res.json();
+    if(!res.ok || !j.ok) throw new Error((j&&j.message) || ('HTTP '+res.status));
+    textEl.value = j.text || '';
+    if(infoEl) infoEl.textContent = j.updatedBy ? ('마지막 수정: '+j.updatedBy+' · '+fmtMemoTime(j.updatedAt)) : '';
+    if(statusEl){ statusEl.textContent=''; statusEl.className='promo-memo-status'; }
+  }catch(e){
+    if(statusEl){ statusEl.textContent='메모를 불러오지 못했습니다: '+e.message; statusEl.className='promo-memo-status is-error'; }
+  }
+}
+async function savePromoMemo(){
+  const btn = document.getElementById('promo-memoSaveBtn');
+  const statusEl = document.getElementById('promo-memoStatus');
+  const infoEl = document.getElementById('promo-memoInfo');
+  const textEl = document.getElementById('promo-memoText');
+  if(!textEl) return;
+  btn.disabled = true;
+  if(statusEl){ statusEl.textContent='저장 중…'; statusEl.className='promo-memo-status'; }
+  try{
+    const res = await fetch(PROMO_MEMO_ENDPOINT, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ text: textEl.value }),
+    });
+    const j = await res.json();
+    if(!res.ok || !j.ok) throw new Error((j&&j.message) || ('HTTP '+res.status));
+    if(infoEl) infoEl.textContent = '마지막 수정: '+j.updatedBy+' · '+fmtMemoTime(j.updatedAt);
+    if(statusEl){ statusEl.textContent='저장되었습니다.'; statusEl.className='promo-memo-status is-ok'; }
+  }catch(e){
+    if(statusEl){ statusEl.textContent='저장 실패: '+e.message; statusEl.className='promo-memo-status is-error'; }
+  }finally{
+    btn.disabled = false;
+  }
+}
+document.getElementById('promo-memoSaveBtn').addEventListener('click',()=>savePromoMemo());
+
 // [2026-07-30 추가] 달력 이전달/다음달/오늘 버튼 - 데이터를 다시 불러올 필요 없이 이미 가진
 // state.promo.rows로 그 달만 다시 그림(월 이동은 재조회 없이 즉시 반응하도록).
 document.getElementById('promo-calPrev').addEventListener('click',()=>{
@@ -1920,7 +2000,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     document.querySelectorAll('.view').forEach(v=>v.classList.remove('on'));
     btn.classList.add('active');
     document.getElementById('view-'+btn.dataset.tab).classList.add('on');
-    if(btn.dataset.tab==='promo' && !state.promo.loaded) loadPromoSchedule();
+    if(btn.dataset.tab==='promo' && !state.promo.loaded){ loadPromoSchedule(); loadPromoMemo(); }
   });
 });
 
@@ -1938,6 +2018,7 @@ if(isHttp){
   fetchData(true);
   state.refreshTimer=setInterval(()=>fetchData(false),REFRESH_MS);
   loadPromoSchedule();
+  loadPromoMemo();
 }else{
   showError('이 파일은 <b>file://</b> 로 열렸습니다. 보안상 자동 로드가 불가하니<br><b>data.xlsx</b> 파일을 직접 선택하거나 아래로 드래그&amp;드롭해 주세요.');
   setLive(false,'파일 모드 — 수동 불러오기');

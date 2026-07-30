@@ -83,6 +83,15 @@ const PROMO_SHEET_CSV_URL =
 const PROMO_DETAIL_CSV_URL =
   'https://docs.google.com/spreadsheets/d/1SmqBjPWhjFIPdMM1iuLAjzDJFO7mAsaOvu9DEhXR-8o/export?format=csv&gid=1620417368';
 
+// [2026-07-30 추가] 프로모션 일정 화면의 "공유 메모" - 로그인한 누구든 같은 내용을 보고
+// 고치는 팀 공유 메모칸. 구글시트가 아니라 KV(dashboard-users, 이미 계정/세션비밀키/
+// Gemini키를 저장하고 있는 그 저장소)에 그대로 하나의 키로 저장함 - 새 KV 네임스페이스를
+// Cloudflare에서 따로 만들 필요 없이 지금 있는 바인딩만으로 되고, 재배포해도 안 지워지는
+// 것도 이미 확인된 저장소라 재사용함. 브라우저 localStorage와 달리 이건 "그 컴퓨터에만"이
+// 아니라 로그인한 모든 사람이 같은 내용을 봄(마지막에 저장한 사람 걸로 덮어써짐).
+const PROMO_MEMO_KV_KEY = '__promo_memo__';
+const PROMO_MEMO_MAX_LEN = 4000;
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -167,6 +176,14 @@ export default {
     // [2026-07-30 추가] 프로모션별 SKU 상세 목록 구글시트 CSV 프록시
     if (url.pathname === '/api/promo-detail' && request.method === 'GET') {
       return handlePromoDetailRequest();
+    }
+
+    // [2026-07-30 추가] 프로모션 일정 화면 공유 메모 - 읽기/쓰기
+    if (url.pathname === '/api/promo-memo' && request.method === 'GET') {
+      return handlePromoMemoGet(env);
+    }
+    if (url.pathname === '/api/promo-memo' && request.method === 'POST') {
+      return handlePromoMemoPost(request, env, session);
     }
 
     // 그 외 나머지(index.html 등)는 정적 자산 그대로 서빙
@@ -308,5 +325,48 @@ async function handlePromoDetailRequest() {
     });
   } catch (e) {
     return jsonError('프로모션 상세품목을 불러오는 중 오류가 발생했습니다: ' + e.message, 500);
+  }
+}
+
+// [2026-07-30 추가] 프로모션 일정 화면의 공유 메모. 로그인한 모든 사람이 같은 내용을
+// 보고, 저장하면 그 내용으로 전부에게 덮어써짐(개인별 저장 아님). KV(dashboard-users)에
+// JSON 문자열 하나로 저장: {text, updatedBy, updatedAt}.
+async function handlePromoMemoGet(env) {
+  try {
+    const raw = await env.USERS.get(PROMO_MEMO_KV_KEY);
+    if (!raw) {
+      return aiJson({ ok: true, text: '', updatedBy: '', updatedAt: null });
+    }
+    const data = JSON.parse(raw);
+    return aiJson({ ok: true, text: data.text || '', updatedBy: data.updatedBy || '', updatedAt: data.updatedAt || null });
+  } catch (e) {
+    return jsonError('메모를 불러오는 중 오류가 발생했습니다: ' + e.message, 500);
+  }
+}
+
+async function handlePromoMemoPost(request, env, session) {
+  let body;
+  try {
+    body = await request.json();
+  } catch (e) {
+    return jsonError('요청 형식이 올바르지 않습니다.', 400);
+  }
+
+  const text = String(body.text || '');
+  if (text.length > PROMO_MEMO_MAX_LEN) {
+    return jsonError('메모는 ' + PROMO_MEMO_MAX_LEN + '자를 넘을 수 없습니다.', 400);
+  }
+
+  const data = {
+    text,
+    updatedBy: session.u,
+    updatedAt: Date.now(),
+  };
+
+  try {
+    await env.USERS.put(PROMO_MEMO_KV_KEY, JSON.stringify(data));
+    return aiJson({ ok: true, text: data.text, updatedBy: data.updatedBy, updatedAt: data.updatedAt });
+  } catch (e) {
+    return jsonError('메모 저장 중 오류가 발생했습니다: ' + e.message, 500);
   }
 }
