@@ -1576,7 +1576,11 @@ async function loadPromoSchedule(){
     const idxEnd     = header.findIndex(c=>c.trim()==='종료일');
     const idxChannel = header.findIndex(c=>c.trim()==='프로모션 채널');
     const idxBrand   = header.findIndex(c=>c.trim()==='브랜드'); // [2026-07-30] "대상 품목/카테고리"에서 "브랜드"로 개편됨
-    const idxNote    = header.findIndex(c=>c.trim()==='비고');
+    // [2026-07-30 수정] 실제 시트 헤더가 "비고"가 아니라 "비고(프로모션 특이사항 기입)"로
+    // 괄호 설명이 붙어있어서, 정확히 일치하는 문자열만 찾던 기존 코드가 이 컬럼을 못 찾고
+    // 있었음(idxNote가 항상 -1이 되어 카드에 비고가 절대 안 보이던 실제 원인). "비고"로
+    // 시작하는 헤더면 찾도록 완화함.
+    const idxNote    = header.findIndex(c=>c.trim().startsWith('비고'));
     // [2026-07-30 정정] 이 값은 "매출 목표"가 아니라 "오늘 날짜 기준 실제 매출액"을 담당자가
     // 매일 수기로 갱신해서 넣는 값입니다(목표치 아님 - 예상매출 컬럼이 재고 전량 판매 가정의
     // 목표/예상치이고, 이 값은 그와 별개인 하루치 실적). 현재는 원본 테이블에만 참고용으로
