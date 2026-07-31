@@ -187,6 +187,8 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
 .promo-warn-item{background:rgba(212,47,82,.08);border:1px solid rgba(212,47,82,.25);border-radius:var(--radius-md);
   padding:10px 14px;font-size:12.5px;color:var(--text-primary);line-height:1.5;}
 .promo-warn-item b{color:var(--color-error-fg);}
+.promo-doneChk{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-secondary);cursor:pointer;user-select:none;}
+.promo-doneChk input{cursor:pointer;margin:0;}
 .promo-tbl-wrap{overflow:auto;}
 .promo-row{cursor:pointer;}
 .promo-row:hover td{background:rgba(17,17,17,.03);}
@@ -559,6 +561,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
       <section class="section card">
         <div class="table-head">
           <h3>프로모션 일정 원본</h3>
+          <label class="promo-doneChk"><input type="checkbox" id="promo-showDone" /> 종료 프로모션 보기</label>
           <span class="row-count" id="promo-rowCount"></span>
         </div>
         <p class="q">행을 클릭하면 "프로모션상세" 시트에 등록된 SKU 목록이 펼쳐집니다. 품목수·예상매출은 프로모션상세 시트(상품코드·수량)와 재고 마스터 데이터를 이용해 대시보드가 자동으로 계산한 값입니다.</p>
@@ -837,9 +840,14 @@ async function askAI(question, rows, contextLabel, resultElId, btnEl){
         // 답변이 나오기도 전에 잘려 "5. Format the Output: * List items where..." 같은
         // 사고 과정 조각만 보이는 문제가 실제로 발생함. 이 질의는 단순 데이터 조회/요약
         // 수준이라 깊은 추론이 필요 없으므로 thinkingLevel을 낮추고 예산도 넉넉히 늘림.
+        // [2026-07-30 재수정] 1536으로도 답변이 문장 중간에서 잘리는 사례가 실제로 보고됨
+        // ("...가장 많이 판매된 품목: 아래" 에서 끊김). 표 형태로 여러 품목을 나열하는 질문은
+        // 생각보다 토큰을 많이 써서 4096으로 올림. 그래도 잘릴 수 있으므로 아래 응답 처리에서
+        // finishReason이 MAX_TOKENS면 "잘렸다"고 사용자에게 명시적으로 알려줌(예전엔 조용히
+        // 잘린 채로 그냥 보여줘서, 사용자가 그게 전체 답변인 줄 알 수밖에 없었음).
         generationConfig:{
           temperature:0.2,
-          maxOutputTokens:1536,
+          maxOutputTokens:4096,
           thinkingConfig:{ thinkingLevel:'low' }
         }
       })
@@ -851,9 +859,17 @@ async function askAI(question, rows, contextLabel, resultElId, btnEl){
     } else {
       // includeThoughts를 안 켰으므로 보통 parts[0]이 곧 답변이지만, 혹시 여러 파트로
       // 나뉘어 오거나 thought 파트가 섞여 와도 안전하게 답변 파트만 골라 이어붙임.
-      const parts = data?.candidates?.[0]?.content?.parts || [];
+      const cand = data?.candidates?.[0];
+      const parts = cand?.content?.parts || [];
       const answerText = parts.filter(p=>!p.thought && p.text).map(p=>p.text).join('\n').trim();
-      resultEl.textContent = answerText || '응답을 받지 못했습니다.';
+      // [2026-07-30 추가] 길이 제한에 걸려 답변이 중간에서 끊긴 경우를 감지해서 알려줌.
+      // 이걸 안 하면 사용자는 잘린 문장을 완성된 답변으로 오해하게 됨(실제로 그런 제보가 있었음).
+      if(cand?.finishReason === 'MAX_TOKENS'){
+        resultEl.textContent = (answerText || '')
+          + '\n\n※ 답변이 길어서 여기서 잘렸습니다. 질문을 더 좁게 나눠서 물어보시면(예: "판매처를 쿠팡로켓으로 필터한 뒤 상위 5개 품목만") 끝까지 볼 수 있습니다.';
+      } else {
+        resultEl.textContent = answerText || '응답을 받지 못했습니다.';
+      }
     }
   } catch(e){
     resultEl.className='ai-result err'; resultEl.textContent = '호출 실패: '+e.message;
@@ -1898,16 +1914,27 @@ function renderPromoCalendar(){
   grid.innerHTML = html;
 }
 
+// [2026-07-30 추가] 기본적으로 종료된 프로모션은 숨기고, "종료 프로모션 보기"를 켰을 때만 같이 보여줌.
+// [주의] 행을 클릭하면 상세품목을 펼치는 기능이 data-promo-idx로 state.promo.rows를 직접 참조하므로,
+// 필터링해도 "원래 배열에서의 인덱스"를 그대로 넘겨야 함(필터 후 새로 매긴 번호를 쓰면 엉뚱한
+// 프로모션의 상세가 펼쳐지는 버그가 생김) - 그래서 filter 전에 origIdx를 먼저 붙여둠.
 function renderPromoTable(){
   const tbody = document.getElementById('promo-tbody');
   const cnt = document.getElementById('promo-rowCount');
   if(!tbody) return;
-  const rows = state.promo.rows;
-  if(cnt) cnt.textContent = rows.length+'건';
-  if(rows.length===0){ tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-tertiary);">데이터가 없습니다.</td></tr>'; return; }
+  const showDone = !!(document.getElementById('promo-showDone')||{}).checked;
+  const all = state.promo.rows.map((r,i)=>({ r, origIdx:i }));
+  const rows = showDone ? all : all.filter(x=> x.r.status!=='종료');
+  const hiddenCount = all.length - rows.length;
+  if(cnt) cnt.textContent = rows.length+'건' + (hiddenCount>0 ? ' (종료 '+hiddenCount+'건 숨김)' : '');
+  if(rows.length===0){
+    const msg = all.length>0 ? '진행중이거나 예정인 프로모션이 없습니다. (종료 '+hiddenCount+'건은 "종료 프로모션 보기"를 켜면 표시됩니다)' : '데이터가 없습니다.';
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-tertiary);">'+msg+'</td></tr>';
+    return;
+  }
   const statusClass = s => s==='진행중' ? 'good' : s==='예정' ? 'info' : 'warn';
-  tbody.innerHTML = rows.map((r,i)=>
-    '<tr class="promo-row" data-promo-idx="'+i+'">'+
+  tbody.innerHTML = rows.map(({r, origIdx})=>
+    '<tr class="promo-row" data-promo-idx="'+origIdx+'">'+
       '<td>'+escAttr(r.no)+'</td>'+
       '<td>'+escAttr(r.name)+' <span class="promo-expand-ic">▸</span></td>'+
       '<td>'+fmtDate(r.start)+'</td>'+
@@ -1968,6 +1995,8 @@ document.getElementById('promo-tbody').addEventListener('click', e=>{
 });
 
 document.getElementById('promo-refreshBtn').addEventListener('click',()=>loadPromoSchedule());
+// [2026-07-30 추가] "종료 프로모션 보기" 체크박스 - 데이터를 다시 불러올 필요 없이 표만 다시 그림
+document.getElementById('promo-showDone').addEventListener('change',()=>renderPromoTable());
 
 // [2026-07-30 추가, 같은 날 카톡 "나에게 쓰기" 방식으로 재구성] 프로모션 일정 화면 공유 메모 -
 // 로그인한 모든 사람이 같은 목록을 봄(worker.js가 KV에 저장/조회, 브라우저 저장 아님). 텍스트
