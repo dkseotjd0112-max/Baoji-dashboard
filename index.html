@@ -2260,7 +2260,18 @@ function renderPromoMemoList(){
     }).join('');
   }
   renderPromoMemoInfo();
-  listEl.scrollTop = listEl.scrollHeight; // 카톡처럼 항상 최신 메모가 보이도록 맨 아래로 스크롤
+  scrollPromoMemoToBottom();
+}
+
+// [2026-08-04 추가] 카톡처럼 항상 최신 메모가 보이도록 목록을 맨 아래로 내림.
+// 예전에는 renderPromoMemoList() 안에서 scrollTop을 바로 대입했는데, 페이지가 처음 열릴 때는
+// 프로모션 탭이 아직 숨겨진 상태(.view가 display:none)라 목록의 scrollHeight가 0으로 잡혀서
+// 스크롤이 맨 위에 머물러 있었음(실제 증상). 그래서 (1) 화면에 그려진 뒤 실행되도록
+// requestAnimationFrame으로 한 박자 미루고 (2) 탭을 열 때와 메모창을 펼칠 때도 다시 호출함.
+function scrollPromoMemoToBottom(){
+  const el = document.getElementById('promo-memoList');
+  if(!el) return;
+  requestAnimationFrame(()=>{ el.scrollTop = el.scrollHeight; });
 }
 
 // 목록이 실제로 바뀌었는지 판단하는 지문(건수+마지막 시각+마지막 글자수) - 10초마다 폴링할 때
@@ -2412,6 +2423,8 @@ document.getElementById('promo-memoExportBtn').addEventListener('click',()=>expo
   head.addEventListener('click', ()=>{
     if(moved){ moved = false; return; } // 드래그 직후 발생하는 클릭은 접기/펼치기 무시
     floatBox.classList.toggle('is-collapsed');
+    // 접혀 있던 걸 다시 펼쳤을 때도 최신 메모가 보이도록
+    if(!floatBox.classList.contains('is-collapsed')) scrollPromoMemoToBottom();
   });
 })();
 
@@ -2443,7 +2456,11 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     document.querySelectorAll('.view').forEach(v=>v.classList.remove('on'));
     btn.classList.add('active');
     document.getElementById('view-'+btn.dataset.tab).classList.add('on');
-    if(btn.dataset.tab==='promo' && !state.promo.loaded){ loadPromoSchedule(); loadPromoMemo(); }
+    if(btn.dataset.tab==='promo'){
+      if(!state.promo.loaded){ loadPromoSchedule(); loadPromoMemo(); }
+      // 탭이 이제 막 보이기 시작한 시점이라, 여기서 다시 맨 아래로 내려야 실제로 적용됨
+      scrollPromoMemoToBottom();
+    }
   });
 });
 
