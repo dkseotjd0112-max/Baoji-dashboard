@@ -330,6 +330,15 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
   /* 상세 주문내역/재고상세처럼 표를 담은 큰 section.card는 한 페이지에 억지로 욱여넣지 않고
      여러 페이지에 걸쳐 자연스럽게 흐르도록 함 (배경/위치가 깨지던 원인) */
   section.card{border:1.2px solid #555 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; break-inside:auto;}
+  /* [2026-08-04 추가] 차트가 들어있는 섹션은 중간에서 쪼개지지 않게 함.
+     증상: "일정 타임라인" 카드에서 제목·드롭다운만 1페이지에 남고 그래프는 2페이지로 넘어가
+     1페이지 아래쪽이 통째로 비었음. 원인은 바로 위 section.card{break-inside:auto} 규칙인데,
+     이건 상세 주문내역·재고상세처럼 긴 표가 여러 페이지에 걸쳐 흐르도록 일부러 넣은 것이라
+     그대로 두고, 차트 섹션에만 .chart-section을 붙여 예외 처리함(표 섹션은 계속 분할 가능).
+     캔버스 크기는 건드리지 않고 페이지 분할 위치만 바꾸는 규칙이라 안전함. */
+  section.chart-section{break-inside:avoid !important;}
+  /* 임의 지점에서 새 페이지를 시작하고 싶을 때 붙이는 유틸리티 클래스 */
+  .page-break-before{break-before:page !important;}
   /* [2026-08-04 추가] 재고 상세처럼 컬럼이 20개가 넘는 표가 인쇄 시 오른쪽으로 삐져나오던 문제 수정.
      원인: 화면용 table에 white-space:nowrap이 걸려 있어 표가 컨테이너(1440px)보다 넓어지는데,
      인쇄에서는 .tbl-scroll의 가로 스크롤이 해제(overflow:visible)되므로 그대로 종이 밖으로 넘어감.
@@ -494,7 +503,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
 
       <section class="kpi-row" id="o-kpiRow"></section>
 
-      <section class="section card trend-card">
+      <section class="section card chart-section trend-card">
         <h3 id="o-trendTitle">일별 판매수량·매출 추이</h3><p class="q" id="o-trendDesc">시간에 따른 출고량과 매출 흐름은? (막대=수량, 선=매출)</p>
         <div class="chart-box" style="height:210px;"><canvas id="o-ch-trend"></canvas></div>
       </section>
@@ -518,7 +527,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
         </div>
       </section>
 
-      <section class="section card">
+      <section class="section card chart-section">
         <h3><span id="o-topMetricLabel">판매수량</span> TOP 10 SKU</h3><p class="q">(현재 필터 기준)</p>
         <div class="chart-box h-tall"><canvas id="o-ch-top"></canvas></div>
       </section>
@@ -597,7 +606,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
         </div>
       </div>
 
-      <section class="section card">
+      <section class="section card chart-section">
         <div class="table-head">
           <h3>일정 타임라인</h3>
           <select id="promo-ganttRange" class="promo-ganttRange" title="타임라인에 표시할 프로모션 범위">
