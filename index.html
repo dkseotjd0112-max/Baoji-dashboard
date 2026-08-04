@@ -853,15 +853,43 @@ async function getGeminiKeyClient(){
   return geminiKeyCache;
 }
 
-function buildAIPrompt(question, rows, contextLabel){
+// [2026-08-04 추가] 집계표 사전계산.
+// 사고 경위: "여성용 사이즈별 판매수량"을 물었더니 실제 132개인데 40개로 답했음. 원인은 화면에
+// 아무리 많은 행이 있어도 AI에는 최대 60건만 전달되는데, 모델이 그 60건만 더해서 전체 합계인 양
+// 답했기 때문. 프롬프트로 "60건만 있다"고 알려줘도 모델이 무시하는 일이 반복됨.
+// 해결: 합계는 브라우저가 "필터된 전체 행"으로 정확히 미리 계산해서 넘기고, 모델은 그 숫자를
+// 읽어 설명만 하도록 함(숫자를 세는 일을 모델에게 시키지 않는다는 원칙).
+function buildAggBlock(allRows, keys){
+  if(!allRows || !allRows.length) return '';
+  const lines = [];
+  keys.forEach(({label, field, valField})=>{
+    const m = {};
+    allRows.forEach(r=>{ const k = (r[field]==null||r[field]==='') ? '(미지정)' : r[field];
+      m[k] = (m[k]||0) + (valField ? (Number(r[valField])||0) : 1); });
+    const entries = Object.entries(m).sort((a,b)=>b[1]-a[1]);
+    if(entries.length) lines.push(`- ${label}: ` + entries.map(([k,v])=>`${k}=${fmtNum(v)}`).join(', '));
+  });
+  return lines.join('\n');
+}
+
+function buildAIPrompt(question, rows, contextLabel, agg){
   const capped = rows.slice(0, AI_MAX_ROWS);
   const q = String(question||'').slice(0, AI_MAX_QUESTION_LEN).trim();
   const dataText = capped.map((r,i)=>`${i+1}. ${JSON.stringify(r)}`).join('\n');
-  return `당신은 캠핑용품/신발 브랜드의 재고관리 담당자를 돕는 어시스턴트입니다.
-아래 [데이터]는 대시보드 화면에 현재 필터링되어 보이는 내용입니다(${contextLabel}, 총 ${capped.length}건 - 화면에 더 있어도 최대 ${AI_MAX_ROWS}건까지만 전달됨).
+  const aggText = agg && agg.text ? `
 
+[집계표 - 필터된 전체 ${fmtNum(agg.totalRows)}건을 대시보드가 직접 계산한 정확한 합계]
+${agg.text}
+` : '';
+  return `당신은 캠핑용품/신발 브랜드의 재고관리 담당자를 돕는 어시스턴트입니다.
+아래 [데이터]는 대시보드 화면에 현재 필터링되어 보이는 내용의 "일부 샘플"입니다(${contextLabel}, 전체 ${agg?fmtNum(agg.totalRows):capped.length}건 중 ${capped.length}건만 발췌).
+${aggText}
 규칙:
-1. 사실 확인(재고량, 판매량, 코드/이름 등)은 반드시 아래 [데이터]에 있는 값만 근거로 답하세요.
+0. [중요] 합계·개수·순위처럼 숫자를 모두 더해야 하는 질문에는 반드시 위 [집계표]의 값을 그대로
+   사용하세요. [데이터]는 전체가 아니라 일부 샘플이므로, 절대 [데이터] 행을 직접 세거나 더해서
+   합계를 만들지 마세요(그렇게 하면 실제보다 훨씬 작은 값이 나옵니다). [집계표]에 없는 기준으로
+   합계를 물으면 "그 기준의 정확한 합계는 대시보드 화면의 필터/차트에서 확인해주세요"라고 답하세요.
+1. 사실 확인(재고량, 판매량, 코드/이름 등)은 반드시 아래 [데이터]와 [집계표]에 있는 값만 근거로 답하세요.
    데이터에 없는 사실은 지어내지 말고 "주어진 데이터에서는 확인할 수 없습니다"라고 답하세요.
 2. 단, [질문]에 사용자가 직접 계산 조건(리드타임, 목표 보유기간, 비율 등)을 제시했다면, 그 조건과
    [데이터]의 숫자를 실제로 계산에 사용해 답하세요 - 이런 계산은 "데이터에 없는 내용"이 아니라
@@ -879,7 +907,7 @@ ${dataText}
 ${q}`;
 }
 
-async function askAI(question, rows, contextLabel, resultElId, btnEl){
+async function askAI(question, rows, contextLabel, resultElId, btnEl, agg){
   const resultEl = document.getElementById(resultElId);
   if(!question || !question.trim()){
     resultEl.className='ai-result err'; resultEl.textContent='질문을 입력해주세요.'; return;
@@ -897,7 +925,7 @@ async function askAI(question, rows, contextLabel, resultElId, btnEl){
   resultEl.className='ai-result'; resultEl.textContent='';
   try{
     const key = await getGeminiKeyClient();
-    const prompt = buildAIPrompt(question, rows, contextLabel);
+    const prompt = buildAIPrompt(question, rows, contextLabel, agg);
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`;
     const res = await fetch(apiUrl, {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -1234,7 +1262,8 @@ document.getElementById('i-exportBtn').addEventListener('click',()=>{
 });
 
 document.getElementById('i-aiAskBtn').addEventListener('click', ()=>{
-  const rows = invTableRows().slice(0,60).map(r=>{
+  const allInv = invTableRows();   // 필터가 적용된 "전체" 행 (60건 제한 없음)
+  const rows = allInv.slice(0,60).map(r=>{
     const row = {
       상품코드:r.code, 상품명:r.name, 브랜드:r.brand, 카테고리:r.category, 모델명:r.model, 성별:r.gender, 사이즈:r.size,
       현재고:r.stock, 안전재고:r.safeStock, 부족수량:r.shortage, 발주필요:r.needOrder?'Y':'N',
@@ -1245,7 +1274,21 @@ document.getElementById('i-aiAskBtn').addEventListener('click', ()=>{
     if(state.hasPrice) row.판매가 = r.price; // 표시제한 계정은 AI에게 넘기는 데이터에도 가격을 아예 안 줌
     return row;
   });
-  askAI(document.getElementById('i-aiInput').value, rows, '재고상세', 'i-aiResult', document.getElementById('i-aiAskBtn'));
+  // 주문분석 탭과 같은 이유로, 합계는 전체 행 기준으로 미리 계산해서 넘김
+  const invAggKeys = [
+    {label:'카테고리별 현재고', field:'category', valField:'stock'},
+    {label:'모델명별 현재고', field:'model', valField:'stock'},
+    {label:'사이즈별 현재고', field:'size', valField:'stock'},
+    {label:'성별 현재고', field:'gender', valField:'stock'},
+    {label:'사이즈별 최근2개월판매', field:'size', valField:'last2m'},
+    {label:'모델명별 부족수량', field:'model', valField:'shortage'},
+  ];
+  const invTotStock = allInv.reduce((a,r)=>a+(r.stock||0),0);
+  const invNeed = allInv.filter(r=>r.needOrder).length;
+  let invAggText = `- 전체 합계: SKU ${fmtNum(allInv.length)}개, 현재고 ${fmtNum(invTotStock)}개, 발주필요 ${fmtNum(invNeed)}개\n`;
+  invAggText += buildAggBlock(allInv, invAggKeys);
+  const invAgg = { totalRows: allInv.length, text: invAggText };
+  askAI(document.getElementById('i-aiInput').value, rows, '재고상세', 'i-aiResult', document.getElementById('i-aiAskBtn'), invAgg);
 });
 document.getElementById('i-aiInput').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('i-aiAskBtn').click(); });
 
@@ -1370,53 +1413,89 @@ function renderOrdTrend(){
 }
 // 매출 모드에서는 도넛 대신 정렬된 가로 막대(값이 막대 끝에 바로 보임)로 표시.
 // 수량 모드는 기존 도넛을 그대로 유지.
-function renderBreakdownDoughnutOrBar(canvasId, field, labels, g, colors, extraOnClick){
+// [2026-08-04 추가] 비중 차트(카테고리/라인업/판매처/출고유형) 마우스오버 시 판매수량과 매출액을
+// 함께 보여주기 위한 집계·툴팁 헬퍼. 차트 자체는 예전처럼 한 가지 기준(계정에 따라 수량 또는
+// 매출)으로만 그리고, 툴팁에서만 두 값을 같이 보여줌 - 막대 길이의 기준이 뭔지 헷갈리지 않게
+// 하기 위함. 가격을 볼 수 없는 표시제한 계정(state.hasPrice=false)에서는 매출액 줄을 생략함.
+function groupBoth(rows, field){
+  return { qty: groupSum(rows, field, 'qty'), amt: groupSum(rows, field, 'amount') };
+}
+function breakdownTooltipLabel(ctx, both, total){
+  const label = ctx.label;
+  const q = (both.qty[label]||0), a = (both.amt[label]||0);
+  const val = (ctx.parsed && ctx.parsed.x!==undefined) ? ctx.parsed.x : ctx.parsed;
+  const lines = [' 판매수량: '+fmtNum(q)+'개'];
+  if(state.hasPrice) lines.push(' 매출액: '+fmtNum(a)+'원');
+  if(total>0) lines.push(' 비중: '+(val/total*100).toFixed(1)+'%');
+  return lines;
+}
+
+function renderBreakdownDoughnutOrBar(canvasId, field, labels, g, colors, extraOnClick, both){
   const isAmt = state.ordMetric==='amount';
+  const total = labels.reduce((a,l)=>a+(g[l]||0),0);
+  const tipCb = both
+    ? { title:c=>c[0].label, label:c=>breakdownTooltipLabel(c, both, total) }
+    : null;
   if(!isAmt){
     mk(canvasId,{type:'doughnut',data:{labels,datasets:[{data:labels.map(l=>g[l]),backgroundColor:colors,borderColor:'#FFFFFF',borderWidth:2,hoverOffset:6}]},
       options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
         onClick:(e,el)=>{if(el.length)extraOnClick(labels[el[0].index]);},
         plugins:{legend:{position:'bottom',labels:{boxWidth:10,boxHeight:10,padding:6,font:{size:10}}},
-          tooltip:{...tip,callbacks:{label:c=>{const t=c.dataset.data.reduce((a,b)=>a+b,0);return ` ${c.label}: ${fmtNum(c.parsed)}개 (${(c.parsed/t*100).toFixed(1)}%)`;}}}}}});
+          tooltip:{...tip,callbacks: tipCb || {label:c=>{const t=c.dataset.data.reduce((a,b)=>a+b,0);return ` ${c.label}: ${fmtNum(c.parsed)}개 (${(c.parsed/t*100).toFixed(1)}%)`;}}}}}});
   } else {
     mk(canvasId,{type:'bar',data:{labels,datasets:[{data:labels.map(l=>g[l]),backgroundColor:'#2C4BB8',borderRadius:4,maxBarThickness:22}]},
       options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
         onClick:(e,el)=>{if(el.length)extraOnClick(labels[el[0].index]);},
-        plugins:{legend:{display:false},tooltip:{...tip,callbacks:{label:c=>' '+fmtNum(c.parsed.x)+'원'}}},
+        plugins:{legend:{display:false},tooltip:{...tip,callbacks: tipCb || {label:c=>' '+fmtNum(c.parsed.x)+'원'}}},
         scales:{x:{grid:{color:GRID},ticks:{callback:v=>fmtWonAbbrev(v),font:{size:10}}},
           y:{grid:{display:false},ticks:{font:{size:10}}}}}});
   }
 }
 function renderOrdCat(){
-  const g=groupSum(ordFilteredRows(),'category',ordValField());
+  const rows=ordFilteredRows();
+  const both=groupBoth(rows,'category');
+  const g=groupSum(rows,'category',ordValField());
   const labels=Object.keys(g).sort((a,b)=>g[b]-g[a]);
-  renderBreakdownDoughnutOrBar('o-ch-cat','category',labels,g,PALETTE,v=>setOrdDrill('category',v));
+  renderBreakdownDoughnutOrBar('o-ch-cat','category',labels,g,PALETTE,v=>setOrdDrill('category',v),both);
 }
 function renderOrdModel(){
-  const g=groupSum(ordFilteredRows(),'model',ordValField());
+  const rows=ordFilteredRows();
+  const both=groupBoth(rows,'model');
+  const g=groupSum(rows,'model',ordValField());
   let labels=Object.keys(g).sort((a,b)=>g[b]-g[a]);
   if(labels.length>12){
     const head=labels.slice(0,12), rest=labels.slice(12);
     const restSum=rest.reduce((a,l)=>a+g[l],0);
     g['기타']=restSum; labels=[...head,'기타'];
+    // 차트에 "기타"로 묶인 것과 똑같은 범위로 수량·금액도 합쳐줘야 툴팁 숫자가 맞음
+    const shown=new Set(head);
+    both.qty['기타']=rest.reduce((a,k)=>a+(both.qty[k]||0),0);
+    both.amt['기타']=rest.reduce((a,k)=>a+(both.amt[k]||0),0);
   }
-  renderBreakdownDoughnutOrBar('o-ch-model','model',labels,g,PALETTE.concat(['#C7CEE0','#A9B4C9','#8E9BB4']),v=>{if(v!=='기타')setOrdDrill('model',v);});
+  renderBreakdownDoughnutOrBar('o-ch-model','model',labels,g,PALETTE.concat(['#C7CEE0','#A9B4C9','#8E9BB4']),v=>{if(v!=='기타')setOrdDrill('model',v);},both);
 }
 function renderOrdChannel(){
-  const g=groupSum(ordFilteredRows(),'channel',ordValField());
+  const rows=ordFilteredRows();
+  const both=groupBoth(rows,'channel');
+  const g=groupSum(rows,'channel',ordValField());
   const labels=Object.keys(g).sort((a,b)=>g[b]-g[a]);
   if(state.ordMetric==='amount'){
-    renderBreakdownDoughnutOrBar('o-ch-channel','channel',labels,g,PALETTE,v=>setOrdDrill('channel',v));
+    renderBreakdownDoughnutOrBar('o-ch-channel','channel',labels,g,PALETTE,v=>setOrdDrill('channel',v),both);
   } else {
+    const total=labels.reduce((a,l)=>a+(g[l]||0),0);
     mk('o-ch-channel',{type:'bar',data:{labels,datasets:[{label:ordMetricLabel(),data:labels.map(l=>g[l]),backgroundColor:'#1C8F8A',borderRadius:4}]},
       options:{responsive:true,maintainAspectRatio:false,onClick:(e,el)=>{if(el.length)setOrdDrill('channel',labels[el[0].index]);},
-        plugins:{legend:{display:false},tooltip:tip},scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{grid:{color:GRID}}}}});
+        plugins:{legend:{display:false},
+          tooltip:{...tip,callbacks:{title:c=>c[0].label,label:c=>breakdownTooltipLabel(c,both,total)}}},
+        scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{grid:{color:GRID}}}}});
   }
 }
 function renderOrdType(){
-  const g=groupSum(ordFilteredRows(),'type',ordValField());
+  const rows=ordFilteredRows();
+  const both=groupBoth(rows,'type');
+  const g=groupSum(rows,'type',ordValField());
   const labels=Object.keys(g).sort((a,b)=>g[b]-g[a]);
-  renderBreakdownDoughnutOrBar('o-ch-type','type',labels,g,['#2C4BB8','#D98A1E','#D42F52','#1C8F8A'],v=>setOrdDrill('type',v));
+  renderBreakdownDoughnutOrBar('o-ch-type','type',labels,g,['#2C4BB8','#D98A1E','#D42F52','#1C8F8A'],v=>setOrdDrill('type',v),both);
 }
 function renderOrdTop(){
   const g=groupSum(ordFilteredRows(),'code',ordValField());
@@ -1544,11 +1623,31 @@ document.getElementById('o-exportBtn').addEventListener('click',()=>{
 });
 
 document.getElementById('o-aiAskBtn').addEventListener('click', ()=>{
-  const rows = ordTableRows().slice(0,60).map(r=>({
+  const allRows = ordTableRows();   // 필터/드릴다운이 적용된 "전체" 행 (60건 제한 없음)
+  const rows = allRows.slice(0,60).map(r=>({
     날짜:r.dateStr, 상품코드:r.code, 브랜드:r.brand, 카테고리:r.category, 모델명:r.model,
     판매처:r.channel, 출고유형:r.type, 사이즈:r.size, 성별:r.gender, 수량:r.qty, 매출금액:r.amount
   }));
-  askAI(document.getElementById('o-aiInput').value, rows, '주문상세', 'o-aiResult', document.getElementById('o-aiAskBtn'));
+  // 합계는 전체 행으로 정확히 미리 계산해서 같이 넘김(모델이 60건만 더해 틀린 합계를 내는 것 방지)
+  const aggKeys = [
+    {label:'사이즈별 판매수량', field:'size', valField:'qty'},
+    {label:'카테고리별 판매수량', field:'category', valField:'qty'},
+    {label:'모델명별 판매수량', field:'model', valField:'qty'},
+    {label:'판매처별 판매수량', field:'channel', valField:'qty'},
+    {label:'출고유형별 판매수량', field:'type', valField:'qty'},
+    {label:'성별 판매수량', field:'gender', valField:'qty'},
+    {label:'브랜드별 판매수량', field:'brand', valField:'qty'},
+  ];
+  if(state.hasPrice){
+    aggKeys.push({label:'카테고리별 매출액(원)', field:'category', valField:'amount'});
+    aggKeys.push({label:'판매처별 매출액(원)', field:'channel', valField:'amount'});
+  }
+  const totalQty = allRows.reduce((a,r)=>a+(r.qty||0),0);
+  const totalAmt = allRows.reduce((a,r)=>a+(r.amount||0),0);
+  let aggText = `- 전체 합계: 판매수량 ${fmtNum(totalQty)}개` + (state.hasPrice ? `, 매출액 ${fmtNum(totalAmt)}원` : '') + `, 주문건수 ${fmtNum(allRows.length)}건\n`;
+  aggText += buildAggBlock(allRows, aggKeys);
+  const agg = { totalRows: allRows.length, text: aggText };
+  askAI(document.getElementById('o-aiInput').value, rows, '주문상세', 'o-aiResult', document.getElementById('o-aiAskBtn'), agg);
 });
 document.getElementById('o-aiInput').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('o-aiAskBtn').click(); });
 
