@@ -285,6 +285,18 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
 @media print{
   body{background:#fff !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; color:#111 !important;}
   .wrap{max-width:none;}
+  /* [2026-08-04 추가] 가로(A4 landscape) 인쇄 시 2단 배치가 1단으로 무너지던 문제 수정.
+     A4 가로의 실제 CSS 폭이 여백을 빼면 약 1000px 정도라, 위쪽 @media(max-width:1100px)
+     반응형 규칙이 인쇄에도 그대로 걸려서 .grid-2/3/4가 전부 1열로 바뀌고 있었음
+     (실제 증상: "카테고리별 재고 비중"과 "발주 우선순위 TOP10"이 나란히 안 나오고
+     위아래로 쪼개져 다음 페이지로 넘어가며 오른쪽 여백이 크게 비어 보임).
+     인쇄에서는 화면과 동일한 다단 배치를 유지하도록 되돌림.
+     [주의] 여기서 차트 높이(.chart-box/.h-mid/.h-tall)는 절대 건드리지 말 것 -
+     화면과 인쇄 높이를 다르게 주면 캔버스가 카드 밖으로 넘치는 문제가 과거 3회 재발했음.
+     이 규칙은 가로 폭(열 개수)만 되돌리고 높이는 그대로 두므로 안전함. */
+  .grid-2{grid-template-columns:1.1fr 1.4fr !important;}
+  .grid-3{grid-template-columns:repeat(3,1fr) !important;}
+  .grid-4{grid-template-columns:repeat(4,1fr) !important;}
   .btn-file,.btn-logout,#fileInput,.live,.tabs,.reset,.search .ic{display:none !important;}
   .period{border:1px solid #888 !important; color:#111 !important;}
   .kpi,.filters,div.card{border:1.2px solid #555 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; break-inside:avoid;}
