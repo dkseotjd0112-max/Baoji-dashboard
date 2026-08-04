@@ -282,9 +282,27 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
 @media(max-width:680px){.grid-4{grid-template-columns:1fr;}}
 @media(max-width:680px){.kpi-row{grid-template-columns:repeat(2,1fr);} .title h1{font-size:17px;}}
 
+/* [2026-08-04 추가] 인쇄 여백 축소. 기본 여백(브라우저 기본값 약 12~20mm)이 넓어서
+   페이지당 쓸 수 있는 세로 길이가 부족했고, 그 결과 비중차트 4개가 들어있는 한 줄
+   (카드 높이 약 380px)이 1페이지 남은 공간(약 345px)에 못 들어가 통째로 다음 페이지로
+   밀리면서 1페이지 하단에 큰 공백이 생기고 있었음.
+   여백만 줄여서 페이지당 약 100px를 더 확보함 - 화면 표시와 차트 크기는 전혀 건드리지
+   않으므로, 과거 3회 재발했던 "인쇄용 차트 높이를 따로 주다가 캔버스가 카드 밖으로
+   넘치는" 문제와는 무관함. 프린터 기종에 따라 여백이 너무 좁으면 8mm를 12mm로 올릴 것. */
+@page{ margin:8mm; }
+
 @media print{
   body{background:#fff !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; color:#111 !important;}
-  .wrap{max-width:none;}
+  /* [2026-08-04 수정] 예전에 있던 .wrap{max-width:none}을 제거하고 화면과 같은 1440px을
+     그대로 쓰도록 되돌림.
+     이유: 크롬 인쇄 미리보기는 Chart.js 캔버스를 "화면에 렌더링된 크기 그대로" 스냅샷 떠서
+     사용함(이 프로젝트에서 이미 3회 확인된 동작). 그래서 인쇄 시 컨테이너 폭이 화면보다
+     넓어지면 카드만 늘어나고 캔버스는 안 늘어나 그래프 오른쪽에 빈 공간이 생김.
+     실제로 A3(가로 약 1527px)로 인쇄했을 때 일별 추이 그래프 오른쪽에 여백이 생기는 것으로
+     확인됨(A4 가로는 약 1122px이라 1440px보다 좁아서 이 문제가 안 보였던 것).
+     따라서 "화면 폭 = 인쇄 폭"을 유지하는 것이 이 페이지에서는 항상 정답임 - 앞으로도
+     인쇄에서 .wrap 폭을 넓히지 말 것. */
+  .wrap{max-width:1440px;}
   /* [2026-08-04 추가] 가로(A4 landscape) 인쇄 시 2단 배치가 1단으로 무너지던 문제 수정.
      A4 가로의 실제 CSS 폭이 여백을 빼면 약 1000px 정도라, 위쪽 @media(max-width:1100px)
      반응형 규칙이 인쇄에도 그대로 걸려서 .grid-2/3/4가 전부 1열로 바뀌고 있었음
@@ -314,6 +332,10 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
   tbody tr.need td{background:#ffe7ec !important;}
   .tbl-scroll{max-height:none !important; overflow:visible !important; border:1.2px solid #555 !important;}
   .img-trigger,.row-count,.drill .x,#o-drillChips .rm{display:none !important;}
+  /* [2026-08-04 추가] 프로모션 일정 탭의 플로팅 공유 메모창은 인쇄에서 제외.
+     화면에 떠 있는 입력 도구라 인쇄물에 들어갈 이유가 없고, position:fixed 요소는
+     브라우저에 따라 페이지마다 반복 인쇄되거나 본문을 가리는 문제도 있음. */
+  .promo-memo-float{display:none !important;}
 }
 </style>
 </head>
