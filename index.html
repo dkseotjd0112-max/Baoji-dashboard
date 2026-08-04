@@ -187,6 +187,9 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
 .promo-warn-item{background:rgba(212,47,82,.08);border:1px solid rgba(212,47,82,.25);border-radius:var(--radius-md);
   padding:10px 14px;font-size:12.5px;color:var(--text-primary);line-height:1.5;}
 .promo-warn-item b{color:var(--color-error-fg);}
+.promo-ganttRange{appearance:none;background:rgba(17,17,17,.04);border:1px solid var(--border-default);
+  color:var(--text-primary);border-radius:var(--radius-md);padding:6px 12px;
+  font:500 12px/1 'Pretendard',sans-serif;cursor:pointer;}
 .promo-doneChk{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-secondary);cursor:pointer;user-select:none;}
 .promo-doneChk input{cursor:pointer;margin:0;}
 .promo-tbl-wrap{overflow:auto;}
@@ -289,7 +292,12 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
    여백만 줄여서 페이지당 약 100px를 더 확보함 - 화면 표시와 차트 크기는 전혀 건드리지
    않으므로, 과거 3회 재발했던 "인쇄용 차트 높이를 따로 주다가 캔버스가 카드 밖으로
    넘치는" 문제와는 무관함. 프린터 기종에 따라 여백이 너무 좁으면 8mm를 12mm로 올릴 것. */
-@page{ margin:8mm; }
+/* [2026-08-04 확정] 용지를 A3 가로로 고정(하드코딩). 이 대시보드의 화면 레이아웃 폭이
+   1440px인데, A3 가로만 가용 폭(약 1527px)이 이보다 넓어서 화면과 인쇄가 1:1로 일치함.
+   A4 세로(733px)/A4 가로·A3 세로(1062px)는 폭이 모자라 축소·잘림이 발생하므로 쓰지 말 것.
+   용지를 여기서 고정해두면 인쇄 대화상자가 A3 가로를 기본값으로 잡아서, 담당자가 매번
+   용지를 고르다 잘못 선택하는 일을 막을 수 있음. */
+@page{ size:A3 landscape; margin:8mm; }
 
 @media print{
   body{background:#fff !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; color:#111 !important;}
@@ -322,7 +330,15 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
   /* 상세 주문내역/재고상세처럼 표를 담은 큰 section.card는 한 페이지에 억지로 욱여넣지 않고
      여러 페이지에 걸쳐 자연스럽게 흐르도록 함 (배경/위치가 깨지던 원인) */
   section.card{border:1.2px solid #555 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; break-inside:auto;}
-  table{border:1px solid #555 !important; border-collapse:collapse;}
+  /* [2026-08-04 추가] 재고 상세처럼 컬럼이 20개가 넘는 표가 인쇄 시 오른쪽으로 삐져나오던 문제 수정.
+     원인: 화면용 table에 white-space:nowrap이 걸려 있어 표가 컨테이너(1440px)보다 넓어지는데,
+     인쇄에서는 .tbl-scroll의 가로 스크롤이 해제(overflow:visible)되므로 그대로 종이 밖으로 넘어감.
+     인쇄에서만 줄바꿈을 허용하고 table-layout:fixed로 컬럼이 가용 폭을 나눠 갖게 해서 항상
+     페이지 안에 들어오도록 함. 표는 캔버스가 아니라 일반 DOM이라 인쇄 시 정상적으로 다시
+     흐르므로, 차트에서 금지된 "화면과 다른 크기" 문제와는 무관함. */
+  table{border:1px solid #555 !important; border-collapse:collapse;
+        table-layout:fixed; width:100% !important; white-space:normal !important; font-size:9.5px !important;}
+  thead th,tbody td{padding:3px 4px !important; word-break:break-word; overflow-wrap:anywhere;}
   /* 화면용 sticky 헤더는 인쇄 시 겹침/깨짐을 유발하므로 해제하고, 대신 각 페이지 상단에 헤더가
      반복되도록(thead를 table-header-group으로) 처리 */
   thead{display:table-header-group;}
@@ -582,8 +598,17 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
       </div>
 
       <section class="section card">
-        <h3>일정 타임라인</h3>
+        <div class="table-head">
+          <h3>일정 타임라인</h3>
+          <select id="promo-ganttRange" class="promo-ganttRange" title="타임라인에 표시할 프로모션 범위">
+            <option value="active">진행중 + 예정만</option>
+            <option value="3m">최근 3개월부터</option>
+            <option value="all">전체 기간</option>
+          </select>
+          <span class="row-count" id="promo-ganttCount"></span>
+        </div>
         <div class="chart-box" id="promo-ganttBox" style="height:260px;"><canvas id="promo-ch-gantt"></canvas></div>
+        <div class="promo-empty-msg" id="promo-ganttEmpty" style="display:none;">표시할 프로모션이 없습니다. 위 선택에서 범위를 넓혀보세요.</div>
       </section>
 
       <section class="section card">
@@ -630,7 +655,7 @@ const state = {
   ordFilters:{brand:'ALL',category:'ALL',model:'ALL',channel:'ALL',type:'ALL',gender:'ALL'}, ordSearch:'', ordSort:{col:'date',dir:-1}, ordDrills:[],
   ordPeriod:{preset:'last1m', from:'', to:''}, ordMetric:'qty',
   charts:{}, refreshTimer:null, openMsel:null,
-  promo:{rows:[], warnings:[], detailByName:{}, loaded:false, calYear:new Date().getFullYear(), calMonth:new Date().getMonth()},
+  promo:{rows:[], warnings:[], detailByName:{}, loaded:false, calYear:new Date().getFullYear(), calMonth:new Date().getMonth(), ganttRange:'active'},
   invByCode:{},
 };
 
@@ -1775,9 +1800,42 @@ function renderPromoCards(){
   ).join('');
 }
 
+// [2026-08-04 추가] 타임라인 표시 범위. 예전에는 시작일·종료일만 있으면 종료된 것까지 전부
+// 그렸는데, 프로모션이 쌓일수록 막대가 계속 늘어나 정작 지금 봐야 할 일정이 안 보이는 문제가
+// 있었음. 기본값은 "진행중 + 예정"(오늘 이후로 아직 안 끝난 것)이고, 필요할 때만 과거를 펼침.
+// 참고: 아래 원본 표의 "종료 프로모션 보기" 체크박스와는 별개 컨트롤임(표는 표대로, 타임라인은
+// 타임라인대로 보는 범위가 다를 수 있어서 일부러 따로 둠).
+function promoGanttFilter(rows){
+  const mode = state.promo.ganttRange || 'active';
+  if(mode === 'all') return rows;
+  const today = new Date(); today.setHours(0,0,0,0);
+  if(mode === 'active'){
+    // 종료일이 오늘 이후 = 아직 안 끝난 것(진행중 + 예정)
+    return rows.filter(r=> r.end >= today);
+  }
+  // '3m' - 최근 3개월 안에 걸쳐 있거나 그 이후 시작하는 것
+  const from = new Date(today.getFullYear(), today.getMonth()-3, today.getDate());
+  return rows.filter(r=> r.end >= from);
+}
+
 function renderPromoGantt(){
-  const rows = state.promo.rows.filter(r=>r.start && r.end);
-  if(rows.length===0){ destroy('promo-ch-gantt'); return; }
+  const all = state.promo.rows.filter(r=>r.start && r.end);
+  const rows = promoGanttFilter(all);
+  const cntEl = document.getElementById('promo-ganttCount');
+  const boxEl = document.getElementById('promo-ganttBox');
+  const emptyEl = document.getElementById('promo-ganttEmpty');
+  if(cntEl) cntEl.textContent = rows.length+'건 표시' + (all.length>rows.length ? ' (전체 '+all.length+'건)' : '');
+  if(rows.length===0){
+    destroy('promo-ch-gantt');
+    if(boxEl) boxEl.style.display='none';
+    if(emptyEl) emptyEl.style.display='';
+    return;
+  }
+  if(boxEl) boxEl.style.display='';
+  if(emptyEl) emptyEl.style.display='none';
+  // 막대 개수에 맞춰 높이를 늘려서, 프로모션이 많아져도 막대가 얇아지지 않게 함.
+  // (화면·인쇄에 같은 값이 적용되므로 인쇄 시 캔버스가 어긋나는 문제는 없음)
+  if(boxEl) boxEl.style.height = Math.min(Math.max(260, rows.length*30 + 70), 640) + 'px';
   // 기준일(가장 이른 시작일)로부터 며칠째인지를 x값으로 사용(날짜축 어댑터 없이 floating bar 구현)
   const refTime = Math.min.apply(null, rows.map(r=>r.start.getTime()));
   const dayIdx = d => Math.round((d.getTime()-refTime)/86400000);
@@ -2031,6 +2089,11 @@ document.getElementById('promo-tbody').addEventListener('click', e=>{
 document.getElementById('promo-refreshBtn').addEventListener('click',()=>loadPromoSchedule());
 // [2026-07-30 추가] "종료 프로모션 보기" 체크박스 - 데이터를 다시 불러올 필요 없이 표만 다시 그림
 document.getElementById('promo-showDone').addEventListener('change',()=>renderPromoTable());
+// [2026-08-04 추가] 타임라인 표시 범위 선택 - 재조회 없이 간트차트만 다시 그림
+document.getElementById('promo-ganttRange').addEventListener('change',(e)=>{
+  state.promo.ganttRange = e.target.value;
+  renderPromoGantt();
+});
 
 // [2026-07-30 추가, 같은 날 카톡 "나에게 쓰기" 방식으로 재구성] 프로모션 일정 화면 공유 메모 -
 // 로그인한 모든 사람이 같은 목록을 봄(worker.js가 KV에 저장/조회, 브라우저 저장 아님). 텍스트
