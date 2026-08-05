@@ -1420,21 +1420,24 @@ function renderOrdTrend(){
 function groupBoth(rows, field){
   return { qty: groupSum(rows, field, 'qty'), amt: groupSum(rows, field, 'amount') };
 }
-function breakdownTooltipLabel(ctx, both, total){
+function breakdownTooltipLabel(ctx, both, total, extra){
   const label = ctx.label;
   const q = (both.qty[label]||0), a = (both.amt[label]||0);
   const val = (ctx.parsed && ctx.parsed.x!==undefined) ? ctx.parsed.x : ctx.parsed;
-  const lines = [' 판매수량: '+fmtNum(q)+'개'];
+  const lines = [];
+  // [2026-08-04 추가] 라인업 차트처럼 항목마다 덧붙일 정보(카테고리 등)가 있으면 맨 위에 표시
+  if(extra && extra[label]) lines.push(' ' + extra[label]);
+  lines.push(' 판매수량: '+fmtNum(q)+'개');
   if(state.hasPrice) lines.push(' 매출액: '+fmtNum(a)+'원');
   if(total>0) lines.push(' 비중: '+(val/total*100).toFixed(1)+'%');
   return lines;
 }
 
-function renderBreakdownDoughnutOrBar(canvasId, field, labels, g, colors, extraOnClick, both){
+function renderBreakdownDoughnutOrBar(canvasId, field, labels, g, colors, extraOnClick, both, extra){
   const isAmt = state.ordMetric==='amount';
   const total = labels.reduce((a,l)=>a+(g[l]||0),0);
   const tipCb = both
-    ? { title:c=>c[0].label, label:c=>breakdownTooltipLabel(c, both, total) }
+    ? { title:c=>c[0].label, label:c=>breakdownTooltipLabel(c, both, total, extra) }
     : null;
   if(!isAmt){
     mk(canvasId,{type:'doughnut',data:{labels,datasets:[{data:labels.map(l=>g[l]),backgroundColor:colors,borderColor:'#FFFFFF',borderWidth:2,hoverOffset:6}]},
@@ -1472,7 +1475,17 @@ function renderOrdModel(){
     both.qty['기타']=rest.reduce((a,k)=>a+(both.qty[k]||0),0);
     both.amt['기타']=rest.reduce((a,k)=>a+(both.amt[k]||0),0);
   }
-  renderBreakdownDoughnutOrBar('o-ch-model','model',labels,g,PALETTE.concat(['#C7CEE0','#A9B4C9','#8E9BB4']),v=>{if(v!=='기타')setOrdDrill('model',v);},both);
+  // [2026-08-04 추가] 라인업마다 어떤 카테고리인지 툴팁에 같이 보여줌.
+  // 한 라인업이 여러 카테고리에 걸쳐 있으면 모두 나열함(예: "퍼포먼스(러닝), 라이프스타일").
+  const catOf = {};
+  rows.forEach(r=>{
+    const m = r.model || '(미지정)';
+    if(!catOf[m]) catOf[m] = new Set();
+    if(r.category) catOf[m].add(r.category);
+  });
+  const extra = {};
+  Object.keys(catOf).forEach(m=>{ const s=[...catOf[m]]; if(s.length) extra[m] = '카테고리: '+s.join(', '); });
+  renderBreakdownDoughnutOrBar('o-ch-model','model',labels,g,PALETTE.concat(['#C7CEE0','#A9B4C9','#8E9BB4']),v=>{if(v!=='기타')setOrdDrill('model',v);},both,extra);
 }
 function renderOrdChannel(){
   const rows=ordFilteredRows();
@@ -1498,11 +1511,61 @@ function renderOrdType(){
   renderBreakdownDoughnutOrBar('o-ch-type','type',labels,g,['#2C4BB8','#D98A1E','#D42F52','#1C8F8A'],v=>setOrdDrill('type',v),both);
 }
 function renderOrdTop(){
-  const g=groupSum(ordFilteredRows(),'code',ordValField());
+  const rows=ordFilteredRows();
+  const g=groupSum(rows,'code',ordValField());
+  const gQty=groupSum(rows,'code','qty'), gAmt=groupSum(rows,'code','amount');
   const labels=Object.keys(g).sort((a,b)=>g[b]-g[a]).slice(0,10);
+
+  // [2026-08-04 추가] 막대에 마우스를 올리면 해당 SKU의 상품 이미지를 같이 띄움.
+  // Chart.js 툴팁 안에는 이미지를 넣을 수 없어서, 재고상세 표에서 이미 쓰고 있는
+  // #imgPopover(showImgPopover/hideImgPopover)를 그대로 재사용함 - 마우스 위치 기준으로
+  // 띄우기 위해 가짜 사각형(getBoundingClientRect만 흉내)을 넘겨줌.
+  // 이미지 URL이 없는 SKU(마스터에 이미지url 미등록)는 그냥 안 띄움.
+  let lastImgCode = '';
+  const showImgAt = (code, evt)=>{
+    const inv = state.invByCode[code];
+    const url = inv && inv.img;
+    if(!url){ hideImgPopover(); lastImgCode=''; return; }
+    if(code === lastImgCode) return;   // 같은 막대 위에서 계속 움직일 때 깜빡임 방지
+    lastImgCode = code;
+    const x = evt.native ? evt.native.clientX : 0;
+    const y = evt.native ? evt.native.clientY : 0;
+    showImgPopover({ getBoundingClientRect: ()=>({ left:x, right:x, top:y, bottom:y, width:0, height:0 }) }, url);
+  };
+
   mk('o-ch-top',{type:'bar',data:{labels,datasets:[{label:ordMetricLabel(),data:labels.map(l=>g[l]),backgroundColor:'#2C4BB8',borderRadius:4}]},
-    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,onClick:(e,el)=>{if(el.length)setOrdDrill('code',labels[el[0].index]);},
-      plugins:{legend:{display:false},tooltip:tip},scales:{x:{grid:{color:GRID}},y:{grid:{display:false},ticks:{font:{size:10}}}}}});
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      onClick:(e,el)=>{if(el.length)setOrdDrill('code',labels[el[0].index]);},
+      onHover:(e,el)=>{
+        if(el.length){ showImgAt(labels[el[0].index], e); }
+        else { hideImgPopover(); lastImgCode=''; }
+      },
+      plugins:{legend:{display:false},
+        tooltip:{...tip,callbacks:{
+          title:c=>{
+            const code=c[0].label; const inv=state.invByCode[code];
+            return inv && inv.name ? code+' · '+inv.name : code;
+          },
+          label:c=>{
+            const code=c.label;
+            const lines=[' 판매수량: '+fmtNum(gQty[code]||0)+'개'];
+            if(state.hasPrice) lines.push(' 매출액: '+fmtNum(gAmt[code]||0)+'원');
+            const inv=state.invByCode[code];
+            if(inv){
+              if(inv.category) lines.push(' 카테고리: '+inv.category);
+              if(!inv.img) lines.push(' (등록된 이미지 없음)');
+            }
+            return lines;
+          }
+        }}},
+      scales:{x:{grid:{color:GRID}},y:{grid:{display:false},ticks:{font:{size:10}}}}}});
+
+  // 차트 밖으로 마우스가 나가면 이미지 닫기 (onHover가 안 불리는 경우 대비)
+  const cv = document.getElementById('o-ch-top');
+  if(cv && !cv.dataset.imgHookBound){
+    cv.addEventListener('mouseleave', ()=>{ hideImgPopover(); lastImgCode=''; });
+    cv.dataset.imgHookBound = '1';
+  }
 }
 
 const ODRILL_LABEL={category:'카테고리',channel:'판매처',type:'출고유형',code:'상품코드',dateStr:'날짜',model:'라인업'};
