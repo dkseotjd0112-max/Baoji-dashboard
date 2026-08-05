@@ -264,6 +264,17 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
 
 .img-trigger{cursor:pointer;font-size:15px;opacity:.85;}
 .img-trigger:hover{opacity:1;}
+/* [2026-08-04 추가] 매출액 TOP10 SKU 전용 툴팁.
+   기존에는 Chart.js 기본 툴팁(텍스트)과 이미지 팝오버를 각각 띄웠더니 둘 다 커서 옆에 나타나
+   서로 겹쳤음(실제 증상). 화면 가장자리에서는 위치를 조정해도 또 겹칠 수 있어서, 텍스트와
+   이미지를 하나의 박스에 담는 커스텀 툴팁으로 합침 - 요소가 하나뿐이라 겹칠 수가 없음. */
+.chart-tip{display:none;position:fixed;z-index:210;background:#FFFFFF;border:1px solid var(--border-strong);
+  border-radius:var(--radius-md);box-shadow:0 6px 24px rgba(17,17,17,.18);padding:10px 12px;
+  max-width:280px;pointer-events:none;}
+.chart-tip .ct-title{font-size:12px;font-weight:700;color:var(--text-primary);line-height:1.35;margin-bottom:6px;}
+.chart-tip .ct-img{width:100%;height:150px;object-fit:contain;background:#F5F6F8;border-radius:var(--radius-sm);margin-bottom:6px;}
+.chart-tip .ct-row{font-size:11.5px;color:var(--text-secondary);line-height:1.6;}
+.chart-tip .ct-row b{color:var(--text-primary);font-weight:600;}
 .img-popover{display:none;position:fixed;z-index:200;background:#FFFFFF;border:1px solid var(--border-strong);
   border-radius:10px;padding:8px;box-shadow:0 12px 32px rgba(17,17,17,.18);}
 .img-popover img{display:block;max-width:240px;max-height:240px;border-radius:6px;object-fit:contain;background:#EEF0F4;}
@@ -643,6 +654,8 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
 
   </div><!-- /dash -->
 </div>
+
+<div id="chartTip" class="chart-tip"></div>
 
 <div id="imgPopover" class="img-popover">
   <img id="imgPopoverImg" src="" alt="상품 이미지" />
@@ -1516,56 +1529,59 @@ function renderOrdTop(){
   const gQty=groupSum(rows,'code','qty'), gAmt=groupSum(rows,'code','amount');
   const labels=Object.keys(g).sort((a,b)=>g[b]-g[a]).slice(0,10);
 
-  // [2026-08-04 추가] 막대에 마우스를 올리면 해당 SKU의 상품 이미지를 같이 띄움.
-  // Chart.js 툴팁 안에는 이미지를 넣을 수 없어서, 재고상세 표에서 이미 쓰고 있는
-  // #imgPopover(showImgPopover/hideImgPopover)를 그대로 재사용함 - 마우스 위치 기준으로
-  // 띄우기 위해 가짜 사각형(getBoundingClientRect만 흉내)을 넘겨줌.
-  // 이미지 URL이 없는 SKU(마스터에 이미지url 미등록)는 그냥 안 띄움.
-  let lastImgCode = '';
-  const showImgAt = (code, evt)=>{
-    const inv = state.invByCode[code];
-    const url = inv && inv.img;
-    if(!url){ hideImgPopover(); lastImgCode=''; return; }
-    if(code === lastImgCode) return;   // 같은 막대 위에서 계속 움직일 때 깜빡임 방지
-    lastImgCode = code;
-    const x = evt.native ? evt.native.clientX : 0;
-    const y = evt.native ? evt.native.clientY : 0;
-    showImgPopover({ getBoundingClientRect: ()=>({ left:x, right:x, top:y, bottom:y, width:0, height:0 }) }, url);
-  };
-
+  // [2026-08-04 추가, 같은 날 겹침 문제로 재작성] 막대에 마우스를 올리면 상품 이미지와 숫자를
+  // 한 박스에 같이 보여줌. 처음에는 Chart.js 기본 툴팁 + 별도 이미지 팝오버를 각각 띄웠는데
+  // 둘 다 커서 옆에 나타나 서로 겹쳤음. 그래서 external 툴팁으로 바꿔 이미지와 텍스트를
+  // 하나의 요소(#chartTip)에 담음 - 요소가 하나뿐이라 구조적으로 겹칠 수가 없음.
   mk('o-ch-top',{type:'bar',data:{labels,datasets:[{label:ordMetricLabel(),data:labels.map(l=>g[l]),backgroundColor:'#2C4BB8',borderRadius:4}]},
     options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
       onClick:(e,el)=>{if(el.length)setOrdDrill('code',labels[el[0].index]);},
-      onHover:(e,el)=>{
-        if(el.length){ showImgAt(labels[el[0].index], e); }
-        else { hideImgPopover(); lastImgCode=''; }
-      },
       plugins:{legend:{display:false},
-        tooltip:{...tip,callbacks:{
-          title:c=>{
-            const code=c[0].label; const inv=state.invByCode[code];
-            return inv && inv.name ? code+' · '+inv.name : code;
-          },
-          label:c=>{
-            const code=c.label;
-            const lines=[' 판매수량: '+fmtNum(gQty[code]||0)+'개'];
-            if(state.hasPrice) lines.push(' 매출액: '+fmtNum(gAmt[code]||0)+'원');
-            const inv=state.invByCode[code];
-            if(inv){
-              if(inv.category) lines.push(' 카테고리: '+inv.category);
-              if(!inv.img) lines.push(' (등록된 이미지 없음)');
-            }
-            return lines;
-          }
-        }}},
+        tooltip:{ enabled:false, external: ctx=>renderTopSkuTip(ctx, gQty, gAmt) }},
       scales:{x:{grid:{color:GRID}},y:{grid:{display:false},ticks:{font:{size:10}}}}}});
 
-  // 차트 밖으로 마우스가 나가면 이미지 닫기 (onHover가 안 불리는 경우 대비)
   const cv = document.getElementById('o-ch-top');
-  if(cv && !cv.dataset.imgHookBound){
-    cv.addEventListener('mouseleave', ()=>{ hideImgPopover(); lastImgCode=''; });
-    cv.dataset.imgHookBound = '1';
+  if(cv && !cv.dataset.tipHookBound){
+    cv.addEventListener('mouseleave', ()=>{ const t=document.getElementById('chartTip'); if(t) t.style.display='none'; });
+    cv.dataset.tipHookBound = '1';
   }
+}
+
+// TOP10 SKU 전용 커스텀 툴팁(이미지 + 숫자를 한 박스에). Chart.js가 툴팁을 그릴 때마다 호출됨.
+function renderTopSkuTip(ctx, gQty, gAmt){
+  const el = document.getElementById('chartTip');
+  if(!el) return;
+  const tt = ctx.tooltip;
+  if(!tt || tt.opacity === 0){ el.style.display='none'; return; }
+
+  const code = (tt.title && tt.title[0]) || (tt.dataPoints && tt.dataPoints[0] && tt.dataPoints[0].label) || '';
+  if(!code){ el.style.display='none'; return; }
+  const inv = state.invByCode[code] || {};
+
+  // 같은 막대면 다시 그리지 않음(이미지가 매번 새로 로드되며 깜빡이는 것 방지)
+  if(el.dataset.code !== code){
+    el.dataset.code = code;
+    let html = '<div class="ct-title">' + escAttr(code) + (inv.name ? '<br>' + escAttr(inv.name) : '') + '</div>';
+    if(inv.img) html += '<img class="ct-img" src="' + escAttr(inv.img) + '" alt="" onerror="this.style.display=\'none\'">';
+    html += '<div class="ct-row">판매수량 <b>' + fmtNum(gQty[code]||0) + '개</b></div>';
+    if(state.hasPrice) html += '<div class="ct-row">매출액 <b>' + fmtNum(gAmt[code]||0) + '원</b></div>';
+    if(inv.category) html += '<div class="ct-row">카테고리 ' + escAttr(inv.category) + '</div>';
+    if(!inv.img) html += '<div class="ct-row" style="color:var(--text-tertiary);">등록된 이미지 없음</div>';
+    el.innerHTML = html;
+  }
+
+  // 캔버스 기준 위치 -> 화면 좌표로 바꾸고, 화면 밖으로 나가지 않게 보정
+  el.style.display = 'block';
+  const r = ctx.chart.canvas.getBoundingClientRect();
+  const w = el.offsetWidth || 260, h = el.offsetHeight || 220;
+  let left = r.left + tt.caretX + 14;
+  let top  = r.top  + tt.caretY - h/2;
+  if(left + w > window.innerWidth - 8) left = r.left + tt.caretX - w - 14; // 오른쪽이 좁으면 왼쪽으로
+  if(left < 8) left = 8;
+  if(top < 8) top = 8;
+  if(top + h > window.innerHeight - 8) top = window.innerHeight - h - 8;
+  el.style.left = left + 'px';
+  el.style.top = top + 'px';
 }
 
 const ODRILL_LABEL={category:'카테고리',channel:'판매처',type:'출고유형',code:'상품코드',dateStr:'날짜',model:'라인업'};
