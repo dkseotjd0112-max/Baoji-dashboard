@@ -23,7 +23,74 @@ html,body{margin:0;padding:0;}
 body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
   background:radial-gradient(1200px 600px at 80% -10%, rgba(44,75,184,0.06), transparent 60%), var(--bg-base);
   color:var(--text-primary); min-height:100vh; -webkit-font-smoothing:antialiased;}
-.wrap{max-width:1440px;margin:0 auto;padding:22px 20px 60px;}
+.wrap{max-width:1560px;margin:0 auto;padding:22px 20px 60px;}
+
+/* ══ 좌측 사이드바 레이아웃 ══════════════════════════════════
+   본문이 길어서 스크롤을 내려도 사이드바는 화면에 남아 있어야 하므로 position:sticky.
+   sticky가 먹으려면 부모가 flex이면서 align-items:flex-start 여야 함
+   (기본값 stretch면 사이드바가 본문 높이만큼 늘어나 버려서 붙어 있을 자리가 없어짐).
+════════════════════════════════════════════════════════════ */
+.shell{display:none;gap:18px;align-items:flex-start;}
+.shell.on{display:flex;}
+.sidebar{position:sticky;top:14px;flex:0 0 208px;width:208px;
+  background:var(--bg-elevated);border:1px solid var(--border-default);border-radius:var(--radius-lg);
+  padding:14px 12px;max-height:calc(100vh - 28px);overflow-y:auto;overflow-x:hidden;
+  transition:flex-basis .18s ease,width .18s ease;}
+.sidebar::-webkit-scrollbar{width:6px;}
+.sidebar::-webkit-scrollbar-thumb{background:rgba(17,17,17,.14);border-radius:3px;}
+
+.sb-head{display:flex;align-items:center;gap:6px;margin-bottom:12px;}
+.sb-head .sb-cap{font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--text-tertiary);flex:1;
+  text-transform:uppercase;white-space:nowrap;overflow:hidden;}
+.sb-toggle{border:1px solid var(--border-default);background:rgba(17,17,17,.03);color:var(--text-secondary);
+  border-radius:var(--radius-md);width:26px;height:26px;flex:0 0 26px;cursor:pointer;display:flex;
+  align-items:center;justify-content:center;padding:0;}
+.sb-toggle:hover{border-color:var(--border-strong);color:var(--text-primary);}
+.sb-toggle svg{transition:transform .18s ease;}
+
+.sb-brand{margin-bottom:14px;}
+.sb-brand label{display:block;font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--text-tertiary);margin-bottom:5px;}
+.sb-brand select{width:100%;appearance:none;
+  background:rgba(17,17,17,.04) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238A8D99' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>") no-repeat right 9px center;
+  border:1px solid var(--border-strong);color:var(--text-primary);border-radius:var(--radius-md);
+  padding:9px 28px 9px 11px;font:600 13px/1 'Pretendard',sans-serif;cursor:pointer;}
+.sb-brand select option{color:#111;background:#fff;}
+.sb-brand .sb-hint{font-size:10.5px;color:var(--text-tertiary);margin-top:5px;line-height:1.45;}
+/* 접었을 때 브랜드 첫 글자만 보여주는 뱃지 */
+.sb-brandChip{display:none;width:100%;height:34px;border-radius:var(--radius-md);
+  background:var(--color-primary-100);color:var(--color-primary-700);
+  font:700 10.5px/1 'Pretendard',sans-serif;align-items:center;justify-content:center;margin-bottom:12px;cursor:pointer;
+  padding:0 3px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;letter-spacing:-.02em;}
+
+.sb-sep{height:1px;background:var(--border-default);margin:0 0 12px;}
+.print-only{display:none;}
+
+.tabs{display:flex;flex-direction:column;gap:4px;}
+.tab-btn{display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+  font:600 13px/1 'Pretendard',sans-serif;border:1px solid transparent;background:transparent;
+  color:var(--text-secondary);border-radius:var(--radius-md);padding:11px 12px;cursor:pointer;transition:.15s;
+  white-space:nowrap;overflow:hidden;}
+.tab-btn svg{flex:0 0 18px;}
+.tab-btn.active{background:var(--color-primary-500);color:#fff;border-color:var(--color-primary-500);font-weight:700;}
+.tab-btn:hover:not(.active){background:rgba(17,17,17,.045);color:var(--text-primary);}
+
+/* ── 접힌 상태 ── */
+.shell.sb-collapsed .sidebar{flex:0 0 60px;width:60px;padding:14px 8px;}
+.shell.sb-collapsed .sb-head .sb-cap,
+.shell.sb-collapsed .sb-brand,
+.shell.sb-collapsed .tab-btn .t-label{display:none;}
+.shell.sb-collapsed .sb-brandChip{display:flex;}
+.shell.sb-collapsed .sb-toggle svg{transform:rotate(180deg);}
+.shell.sb-collapsed .tab-btn{justify-content:center;padding:11px 0;}
+
+@media (max-width:900px){
+  .shell{flex-direction:column;}
+  .sidebar{position:static;flex:1 1 auto;width:100%;max-height:none;}
+  .tabs{flex-direction:row;flex-wrap:wrap;}
+  .tab-btn{width:auto;}
+  .sb-brandChip{display:none !important;}
+}
 
 .topbar{display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap;}
 .title h1{margin:0;font-size:20px;font-weight:700;letter-spacing:-0.01em;}
@@ -44,11 +111,6 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .live.on .dot{animation:pulse 2s infinite;}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(28,143,90,.5);}70%{box-shadow:0 0 0 7px rgba(28,143,90,0);}100%{box-shadow:0 0 0 0 rgba(28,143,90,0);}}
 
-.tabs{display:flex;gap:8px;margin-bottom:18px;}
-.tab-btn{font:700 13px/1 'Pretendard',sans-serif;border:1px solid var(--border-default);background:var(--bg-elevated);
-  color:var(--text-secondary);border-radius:var(--radius-full);padding:10px 20px;cursor:pointer;transition:.15s;}
-.tab-btn.active{background:var(--color-primary-500);color:#fff;border-color:var(--color-primary-500);}
-.tab-btn:hover:not(.active){color:var(--text-primary);border-color:var(--border-strong);}
 .view{display:none;} .view.on{display:block;}
 
 .filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:18px;
@@ -290,7 +352,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
 .dropzone:hover,.dropzone.drag{border-color:var(--color-primary-300);background:rgba(44,75,184,.06);}
 .spinner{width:34px;height:34px;border:3px solid rgba(17,17,17,.12);border-top-color:var(--color-primary-300);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px;}
 @keyframes spin{to{transform:rotate(360deg);}}
-#dash{display:none;} #dash.on{display:block;}
+#dash{flex:1;min-width:0;display:none;} #dash.on{display:block;}
 
 @media(max-width:1100px){.kpi-row{grid-template-columns:repeat(3,1fr);} .grid-2{grid-template-columns:1fr;} .grid-3{grid-template-columns:1fr;} .grid-4{grid-template-columns:repeat(2,1fr);}}
 @media(max-width:680px){.grid-4{grid-template-columns:1fr;}}
@@ -321,7 +383,18 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
      확인됨(A4 가로는 약 1122px이라 1440px보다 좁아서 이 문제가 안 보였던 것).
      따라서 "화면 폭 = 인쇄 폭"을 유지하는 것이 이 페이지에서는 항상 정답임 - 앞으로도
      인쇄에서 .wrap 폭을 넓히지 말 것. */
-  .wrap{max-width:1440px;}
+  /* [2026-08-21 수정] 왼쪽 사이드바가 생기면서 본문(#dash)의 실제 폭이 좁아졌습니다.
+     화면:  .wrap 1560 - 좌우패딩 40 = 1520,  1520 - 사이드바 208 - 간격 18 = #dash 1294px
+     인쇄:  사이드바를 숨기는 대신 .wrap을 1334px로 줄여   1334 - 40 = 본문 1294px
+     → 바로 위 주석의 "화면 폭 = 인쇄 폭" 원칙을 그대로 지킵니다.
+     사이드바만 숨기고 폭을 1440px로 두면 본문이 화면보다 106px 넓어져서, 캔버스는 그대로인 채
+     카드만 늘어나 그래프 오른쪽에 빈 공간이 생깁니다(이미 3회 겪은 그 증상). 숫자를 임의로
+     바꾸지 마시고, 사이드바 폭(208)이나 .wrap(1560)을 바꿀 때 여기 1334도 같이 맞춰주세요. */
+  .wrap{max-width:1334px;}
+  .shell{display:block !important;}
+  .sidebar{display:none !important;}
+  #dash{flex:none !important;width:auto !important;}
+  .print-only{display:inline-flex !important;align-items:center;}
   /* [2026-08-04 추가] 가로(A4 landscape) 인쇄 시 2단 배치가 1단으로 무너지던 문제 수정.
      A4 가로의 실제 CSS 폭이 여백을 빼면 약 1000px 정도라, 위쪽 @media(max-width:1100px)
      반응형 규칙이 인쇄에도 그대로 걸려서 .grid-2/3/4가 전부 1열로 바뀌고 있었음
@@ -386,6 +459,8 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
     <span id="restrictedBadge" class="badge warn" style="display:none;margin-left:10px;">표시제한 계정</span>
     <div class="spacer"></div>
     <span id="live" class="live"><span class="dot"></span><span id="liveTxt">연결 대기</span></span>
+    <!-- 인쇄할 때는 사이드바가 숨겨져서 어느 브랜드를 본 자료인지 알 수 없으므로, 종이에만 찍히는 표시 -->
+    <span class="period print-only" id="brandBadge">브랜드 <b id="brandBadgeTxt">전체 브랜드</b></span>
     <span class="period">기준 <b id="period">—</b></span>
     <button class="btn-file" id="fileBtn">파일 불러오기</button>
     <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none" />
@@ -407,18 +482,54 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
     </div>
   </div>
 
-  <div id="dash">
+  <!-- ══════════════════════════════════════════════════════════
+       좌측 고정 사이드바 + 본문
+       사이드바는 position:sticky라 본문 스크롤을 내려도 화면에 남습니다.
+       브랜드는 여기 하나로 전체 탭(재고/주문)에 동시에 걸립니다.
+  ══════════════════════════════════════════════════════════ -->
+  <div class="shell" id="shell">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-head">
+      <span class="sb-cap">메뉴</span>
+      <button class="sb-toggle" id="sbToggle" type="button" title="사이드바 접기 / 펼치기" aria-label="사이드바 접기 / 펼치기">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+    </div>
+
+    <div class="sb-brand">
+      <label for="g-brand">브랜드</label>
+      <select id="g-brand"><option value="ALL">전체 브랜드</option></select>
+      <div class="sb-hint" id="g-brandHint">전체 브랜드 통계를 보고 있습니다.</div>
+    </div>
+    <div class="sb-brandChip" id="g-brandChip" title="브랜드">전체</div>
+
+    <div class="sb-sep"></div>
 
     <div class="tabs">
-      <button class="tab-btn" data-tab="ord">주문 분석</button>
-      <button class="tab-btn active" data-tab="inv">재고 / 발주 현황</button>
-      <button class="tab-btn" data-tab="promo">프로모션 일정</button>
+      <button class="tab-btn" data-tab="ord" title="주문 분석">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
+        <span class="t-label">주문 분석</span>
+      </button>
+      <button class="tab-btn active" data-tab="inv" title="재고 / 발주 현황">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>
+        <span class="t-label">재고 / 발주</span>
+      </button>
+      <button class="tab-btn" data-tab="promo" title="프로모션 일정">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg>
+        <span class="t-label">프로모션 일정</span>
+      </button>
     </div>
+  </aside>
+
+  <div id="dash">
 
     <!-- ══════════════════ 재고/발주 현황 ══════════════════ -->
     <div class="view on" id="view-inv">
       <section class="filters" id="filters-inv">
-        <div class="fl"><label>브랜드</label><select id="i-brand"></select></div>
+        <!-- 브랜드는 왼쪽 사이드바로 옮겼습니다(전체 탭 공통). 아래 select는 화면에는 안 보이지만
+             기존 필터/즐겨찾기/내보내기 코드가 그대로 참조하므로 DOM에는 남겨 둡니다. -->
+        <div class="fl" style="display:none;"><label>브랜드</label><select id="i-brand"></select></div>
         <div class="fl"><label>카테고리</label><select id="i-category"></select></div>
         <div class="fl"><label>모델명</label><div class="msel" id="i-model"></div></div>
         <div class="fl"><label>성별</label><div class="msel" id="i-gender"></div></div>
@@ -491,7 +602,8 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
           </div>
         </div>
         <div class="filters-break"></div>
-        <div class="fl"><label>브랜드</label><select id="o-brand"></select></div>
+        <!-- 브랜드는 왼쪽 사이드바로 이동(전체 탭 공통). 아래 select는 숨김 상태로 유지합니다. -->
+        <div class="fl" style="display:none;"><label>브랜드</label><select id="o-brand"></select></div>
         <div class="fl"><label>카테고리</label><select id="o-category"></select></div>
         <div class="fl"><label>모델명</label><div class="msel" id="o-model"></div></div>
         <div class="fl"><label>판매처</label><div class="msel" id="o-channel"></div></div>
@@ -653,6 +765,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
     </div>
 
   </div><!-- /dash -->
+  </div><!-- /shell -->
 </div>
 
 <div id="chartTip" class="chart-tip"></div>
@@ -672,6 +785,11 @@ const SHEET_INV = '재고현황';
 const SHEET_ORD = '주문로그';
 
 const state = {
+  // [2026-08-21] brand = 사이드바의 전역 브랜드. 'ALL'이면 전체 브랜드 통계.
+  // 재고/주문 탭의 개별 브랜드 필터(invFilters.brand/ordFilters.brand)는 이 값을 그대로 따라갑니다
+  //  - 기존 필터·즐겨찾기·엑셀내보내기 코드를 건드리지 않으려고 계산 경로는 그대로 두고,
+  //    "값을 넣어주는 곳"만 사이드바 한 곳으로 모은 구조입니다.
+  brand:'ALL',
   inv:[], ord:[],
   invFilters:{brand:'ALL',category:'ALL',model:'ALL',gender:'ALL',onlyNeed:false}, invSearch:'', invSort:{col:'needOrder',dir:-1},
   ordFilters:{brand:'ALL',category:'ALL',model:'ALL',channel:'ALL',type:'ALL',gender:'ALL'}, ordSearch:'', ordSort:{col:'date',dir:-1}, ordDrills:[],
@@ -725,6 +843,7 @@ const isHttp = location.protocol==='http:'||location.protocol==='https:';
 
 function showError(msg){
   document.getElementById('loading').classList.remove('on');
+  document.getElementById('shell').classList.remove('on');
   document.getElementById('dash').classList.remove('on');
   document.getElementById('errorState').classList.add('on');
   if(msg) document.getElementById('errMsg').innerHTML=msg;
@@ -825,11 +944,15 @@ function parseWorkbook(buf){
 
   document.getElementById('period').textContent = new Date().toLocaleString('ko-KR',{hour12:false});
 
+  // 사이드바 브랜드 목록을 먼저 만들고(전역 브랜드를 두 탭 필터에 밀어넣음) 그 다음 렌더링
+  buildGlobalBrand();
+
   buildInvFilters(); renderInv();
   buildOrdFilters(); renderOrd();
 
   document.getElementById('loading').classList.remove('on');
   document.getElementById('errorState').classList.remove('on');
+  document.getElementById('shell').classList.add('on');
   document.getElementById('dash').classList.add('on');
 }
 
@@ -1251,14 +1374,19 @@ function renderInvTable(){
 });
 document.getElementById('i-onlyNeed').addEventListener('change',e=>{state.invFilters.onlyNeed=e.target.checked;buildInvFilters();renderInv();});
 document.getElementById('i-resetBtn').addEventListener('click',()=>{
-  state.invFilters={brand:'ALL',category:'ALL',model:'ALL',gender:'ALL',onlyNeed:false}; state.invSearch=''; document.getElementById('i-searchBox').value='';
+  // 브랜드는 사이드바(전역)에서만 바꾸는 값이라 "필터 초기화"로 풀리지 않게 유지합니다
+  state.invFilters={brand:state.brand,category:'ALL',model:'ALL',gender:'ALL',onlyNeed:false}; state.invSearch=''; document.getElementById('i-searchBox').value='';
   document.getElementById('i-favSelect').value='';
   state.openMsel=null;
   buildInvFilters(); renderInv();});
 document.getElementById('i-searchBox').addEventListener('input',e=>{state.invSearch=e.target.value;renderInvTable();});
 setupFavControls('i',
   ()=>({filters:{...state.invFilters}, search:state.invSearch}),
-  (saved)=>{ state.invFilters={...saved.filters}; state.invSearch=saved.search||''; document.getElementById('i-searchBox').value=state.invSearch; },
+  (saved)=>{ state.invFilters={...saved.filters}; state.invSearch=saved.search||''; document.getElementById('i-searchBox').value=state.invSearch;
+    // 예전에 저장해 둔 즐겨찾기에도 브랜드가 들어 있지만, 브랜드는 이제 사이드바가 주인이라
+    // 즐겨찾기를 불러와도 사이드바에 보이는 브랜드가 그대로 유지되도록 덮어씁니다
+    // (그러지 않으면 사이드바는 '전체'인데 표만 특정 브랜드로 바뀌어 원인을 찾기 어려워집니다).
+    state.invFilters.brand = state.brand; },
   buildInvFilters, renderInv);
 document.getElementById('i-exportBtn').addEventListener('click',()=>{
   const rows=invTableRows();
@@ -1672,7 +1800,8 @@ document.getElementById('o-dateTo').addEventListener('change',e=>{
   clearOrdDrillSilent(); buildOrdFilters(); renderOrd();
 });
 document.getElementById('o-resetBtn').addEventListener('click',()=>{
-  state.ordFilters={brand:'ALL',category:'ALL',model:'ALL',channel:'ALL',type:'ALL',gender:'ALL'};
+  // 브랜드는 사이드바(전역) 값을 유지 - 위 재고탭과 같은 이유
+  state.ordFilters={brand:state.brand,category:'ALL',model:'ALL',channel:'ALL',type:'ALL',gender:'ALL'};
   state.ordPeriod={preset:'last1m',from:'',to:''};
   document.getElementById('o-dateFrom').value=''; document.getElementById('o-dateTo').value='';
   state.ordSearch=''; document.getElementById('o-searchBox').value='';
@@ -1684,6 +1813,7 @@ setupFavControls('o',
   ()=>({filters:{...state.ordFilters}, search:state.ordSearch, period:{...state.ordPeriod}}),
   (saved)=>{
     state.ordFilters={...saved.filters}; state.ordSearch=saved.search||''; document.getElementById('o-searchBox').value=state.ordSearch;
+    state.ordFilters.brand = state.brand;   // 브랜드는 사이드바가 주인 (재고탭과 동일)
     state.ordPeriod = saved.period ? {...saved.period} : {preset:'last1m',from:'',to:''};
     document.getElementById('o-dateFrom').value=state.ordPeriod.from||''; document.getElementById('o-dateTo').value=state.ordPeriod.to||'';
     clearOrdDrillSilent();
@@ -2525,6 +2655,77 @@ document.getElementById('promo-calTodayBtn').addEventListener('click',()=>{
   state.promo.calMonth = now.getMonth();
   renderPromoCalendar();
 });
+
+/* ════════════════════════════════════════════════════════
+   [2026-08-21] 사이드바 - 전역 브랜드 + 접기/펼치기
+   ────────────────────────────────────────────────────────
+   브랜드를 탭마다 따로 고르던 걸 사이드바 한 곳으로 모았습니다.
+   계산 방식은 그대로 두고(invFilteredRows/ordFilteredRows가 여전히
+   invFilters.brand / ordFilters.brand를 봅니다) 그 값을 채워 넣는
+   창구만 하나로 만든 구조라, KPI·차트·표·엑셀내보내기가 전부 자동으로 따라옵니다.
+════════════════════════════════════════════════════════ */
+function buildGlobalBrand(){
+  const set = new Set();
+  state.inv.forEach(r=>{ if(r.brand) set.add(r.brand); });
+  state.ord.forEach(r=>{ if(r.brand) set.add(r.brand); });
+  const list = [...set].sort();
+
+  // 데이터가 갱신되면서 지금 보던 브랜드가 사라진 경우 - 그대로 두면 빈 화면이 되므로 전체로 되돌림
+  if(state.brand!=='ALL' && !set.has(state.brand)) state.brand='ALL';
+
+  const sel = document.getElementById('g-brand');
+  sel.innerHTML = '<option value="ALL">전체 브랜드</option>' +
+    list.map(b=>`<option value="${escAttr(b)}">${escAttr(b)}</option>`).join('');
+  sel.value = state.brand;
+  syncGlobalBrand();
+}
+
+// 전역 브랜드를 두 탭의 필터에 밀어넣고 사이드바 표시를 갱신합니다(다시 그리는 건 호출한 쪽에서).
+function syncGlobalBrand(){
+  state.invFilters.brand = state.brand;
+  state.ordFilters.brand = state.brand;
+
+  const isAll = state.brand==='ALL';
+  const hint = document.getElementById('g-brandHint');
+  if(hint) hint.textContent = isAll ? '전체 브랜드 통계를 보고 있습니다.'
+                                    : `'${state.brand}' 브랜드만 집계합니다.`;
+  const chip = document.getElementById('g-brandChip');
+  if(chip){
+    chip.textContent = isAll ? '전체' : state.brand;
+    chip.title = isAll ? '전체 브랜드' : state.brand;
+  }
+  const badge = document.getElementById('brandBadgeTxt');
+  if(badge) badge.textContent = isAll ? '전체 브랜드' : state.brand;   // 인쇄물 상단 표시
+}
+
+document.getElementById('g-brand').addEventListener('change',e=>{
+  state.brand = e.target.value;
+  syncGlobalBrand();
+  // 지금 안 보이는 탭도 같이 다시 계산합니다 - 탭을 옮겼을 때 이전 브랜드 화면이 남아 있으면 안 되니까
+  buildInvFilters(); renderInv();
+  clearOrdDrillSilent(); buildOrdFilters(); renderOrd();
+});
+
+// 접힌 상태에서 브랜드 뱃지를 누르면 다시 펼쳐서 바로 고를 수 있게
+document.getElementById('g-brandChip').addEventListener('click',()=>{
+  setSidebar(false);
+  setTimeout(()=>{ const s=document.getElementById('g-brand'); if(s) s.focus(); },220);
+});
+
+const SB_KEY = 'baoji_dash_sidebar_collapsed';
+function setSidebar(collapsed){
+  document.getElementById('shell').classList.toggle('sb-collapsed', collapsed);
+  try{ localStorage.setItem(SB_KEY, collapsed?'1':'0'); }catch(e){}
+  // 차트는 컨테이너 폭이 바뀌어도 스스로 다시 그리지 않으므로, 접기 애니메이션(0.18s)이
+  // 끝난 뒤 직접 resize를 불러줘야 그래프가 찌그러지지 않습니다.
+  setTimeout(()=>{ Object.values(state.charts).forEach(c=>{ try{ c.resize(); }catch(e){} }); }, 240);
+}
+document.getElementById('sbToggle').addEventListener('click',()=>{
+  setSidebar(!document.getElementById('shell').classList.contains('sb-collapsed'));
+});
+try{
+  if(localStorage.getItem(SB_KEY)==='1') document.getElementById('shell').classList.add('sb-collapsed');
+}catch(e){}
 
 /* ════════════════════════════════════════════════════════
    탭 전환 / 파일 입력 / 부팅
