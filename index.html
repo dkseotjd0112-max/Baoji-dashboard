@@ -181,6 +181,10 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
      인쇄에서 빠지면 A4 가로에서 1열로 무너집니다(.grid-4에서 이미 겪은 문제). */
 .chart-row{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;align-items:start;}
 .chart-row > .card{grid-column:span 2;}   /* JS가 다시 지정하기 전 기본값 */
+/* 사이즈 도넛의 성별 색 안내 - 도넛 위쪽에 두 칸만 */
+.size-key{display:flex;gap:12px;flex-wrap:wrap;margin:-6px 0 8px;}
+.size-key .skey{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;color:var(--text-secondary);}
+.size-key .skey i{width:11px;height:11px;border-radius:3px;display:inline-block;}
 
 .metric-toggle{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
 .metric-toggle-label{font-size:12px;font-weight:600;color:var(--text-tertiary);margin-right:2px;}
@@ -711,6 +715,8 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
         </div>
         <div class="card" id="o-card-size">
           <h3>사이즈별 판매</h3><p class="q" id="o-sizeDesc">어느 사이즈가 잘 나가나?</p>
+          <!-- 성별 색 안내 (도넛 위쪽). 사이즈 자체는 조각 위에 직접 찍히므로 범례가 없습니다 -->
+          <div class="size-key" id="o-sizeKey" style="display:none;"></div>
           <div class="chart-box h-mid"><canvas id="o-ch-size"></canvas></div>
           <p class="q" id="o-sizeNote" style="margin:8px 0 0;display:none;"></p>
         </div>
@@ -1214,16 +1220,15 @@ function msMatchOpts(sel, val){ return sel==='ALL' || !Array.isArray(sel) || sel
 
 // 사이즈 정렬 - 신발 사이즈(235/240/…)는 숫자 크기순, 텍스트(블랙/원형/3m 등)는 뒤에 가나다순.
 // 기본 sort()는 문자열 비교라 "100, 235, 90" 처럼 뒤죽박죽이 됨.
-function sortSizes(arr){
+function sizeCmp(a,b){
   const isNum = v => /^\d+(\.\d+)?$/.test(String(v).trim());
-  return arr.slice().sort((a,b)=>{
-    const an=isNum(a), bn=isNum(b);
-    if(an&&bn) return parseFloat(a)-parseFloat(b);
-    if(an) return -1;
-    if(bn) return 1;
-    return String(a).localeCompare(String(b),'ko');
-  });
+  const an=isNum(a), bn=isNum(b);
+  if(an&&bn) return parseFloat(a)-parseFloat(b);
+  if(an) return -1;
+  if(bn) return 1;
+  return String(a).localeCompare(String(b),'ko');
 }
+function sortSizes(arr){ return arr.slice().sort(sizeCmp); }
 function buildMultiSelect(containerId, filtersObj, field, opts, allLabel, onChange){
   const box=document.getElementById(containerId);
 
@@ -1890,6 +1895,17 @@ function breakdownTooltipLabel(ctx, both, total, extra){
   return lines;
 }
 
+// [2026-08-24] 위 함수는 ctx.label로 집계를 찾는데, 사이즈 도넛은 화면 라벨("240")과
+// 집계 키("남성|240")가 달라서 못 씁니다. 키를 직접 받는 버전.
+function breakdownTooltipLabelByKey(ctx, both, total, key){
+  const q=(both.qty[key]||0), a=(both.amt[key]||0);
+  const val=(ctx.parsed && ctx.parsed.x!==undefined) ? ctx.parsed.x : ctx.parsed;
+  const lines=[' 판매수량: '+fmtNum(q)+'개'];
+  if(state.hasPrice) lines.push(' 매출액: '+fmtNum(a)+'원');
+  if(total>0) lines.push(' 비중: '+(val/total*100).toFixed(1)+'%');
+  return lines;
+}
+
 function renderBreakdownDoughnutOrBar(canvasId, field, labels, g, colors, extraOnClick, both, extra){
   const isAmt = state.ordMetric==='amount';
   const total = labels.reduce((a,l)=>a+(g[l]||0),0);
@@ -2004,8 +2020,68 @@ function layoutOrdChartRow(){
       연한색 → 진한색이 되게 해서, 도넛을 시계방향으로 돌며 분포를 읽을 수 있게 했습니다.
    ③ 숫자 사이즈가 하나도 없는 브랜드(캠핑용품 전용 등)면 제외하지 않고 전부 보여줍니다
       - 안 그러면 빈 차트가 되기 때문입니다. */
-const SIZE_RAMP=['#DCE4F7','#C3D0F0','#A9BCE9','#8FA6E8','#7590DE','#5B7FD9','#4767CB','#2C4BB8','#24409E','#1E337A','#182861'];
+// 맨 앞을 너무 연하게 두면(#DCE4F7) 흰 카드 위에서 조각이 안 보여서 시작 톤을 한 단계 올렸습니다.
+// [2026-08-24] 성별로 색 계열을 나눕니다 - 남성 240과 여성 240은 다른 상품인데 한 계열로 두면
+// 도넛에서 어디까지가 남성인지 구분이 안 됩니다. 계열 안에서는 작은 사이즈 → 큰 사이즈로 진해집니다.
+const SIZE_RAMP  =['#C3D0F0','#B0C0EC','#9DB1E7','#8AA2E2','#7792DC','#6483D7','#5273CE','#4463C3','#3653B5','#2C4BB8','#1E337A']; // 남성 - 파랑
+const SIZE_RAMP_F=['#F6C9CE','#F2B4BC','#EE9FA9','#EA8A97','#E67585','#E26073','#D94E62','#CE4256','#C2364A','#B02B3E','#8F2032']; // 여성 - 로즈
+const SIZE_RAMP_X=['#D6D9E0','#C6CAD3','#B6BBC6','#A6ACB9','#969DAC','#868F9F','#768192','#667285','#566478','#46556B','#36475E']; // 그 외 - 회색
+const GENDER_RAMP={'남성':SIZE_RAMP,'남':SIZE_RAMP,'여성':SIZE_RAMP_F,'여':SIZE_RAMP_F};
+const GENDER_ORDER=['남성','남','여성','여','공용'];
+const GENDER_SHORT=g=>({'남성':'남','여성':'여'}[g]||g);
 function isNumericSize(v){ const s=String(v).trim(); return /^\d+(\.\d+)?$/.test(s) && parseFloat(s)>0; }
+
+// 조각 색 위에 얹을 글자색 - 연한 조각엔 검정, 진한 조각엔 흰색(밝기로 자동 판별)
+function textOnColor(hex){
+  const c=String(hex).replace('#','');
+  const r=parseInt(c.substr(0,2),16), g=parseInt(c.substr(2,2),16), b=parseInt(c.substr(4,2),16);
+  return (r*299+g*587+b*114)/1000 > 150 ? '#111111' : '#FFFFFF';
+}
+
+/* [2026-08-24] 도넛 조각 위에 직접 라벨을 찍는 플러그인.
+   아래쪽 범례를 없애고 조각 위에 바로 적으면, 색과 사이즈를 눈으로 짝지어 찾을 필요가 없어집니다.
+   (chartjs-plugin-datalabels는 안 쓰고 직접 그립니다 - CDN 하나 더 붙이지 않으려고)
+   · 조각이 넉넉하면(6% 이상) 조각 안에 "240 / 23%" 두 줄
+   · 얇으면 글자가 조각 밖으로 삐져나오므로 링 바깥에 조각 색으로 작게 표시
+   · 아주 작은 조각(1.5% 미만)은 겹쳐서 못 읽으니 생략합니다(툴팁에는 그대로 나옴) */
+const donutSliceLabels = {
+  id:'donutSliceLabels',
+  afterDatasetsDraw(chart){
+    const ds=chart.data.datasets[0]; if(!ds) return;
+    const meta=chart.getDatasetMeta(0);
+    const total=ds.data.reduce((a,b)=>a+(b||0),0);
+    if(total<=0) return;
+    const ctx=chart.ctx;
+    ctx.save();
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    meta.data.forEach((arc,i)=>{
+      const v=ds.data[i]||0; if(v<=0) return;
+      const pct=v/total*100;
+      if(pct<1.5) return;
+      const label=String(chart.data.labels[i]);
+      // 성별로 나눠 그릴 때는 조각마다 '남'/'여'를 같이 적어 줍니다(dataset._sub)
+      const sub=(ds._sub && ds._sub[i]) ? ds._sub[i]+' ' : '';
+      const p=arc.getProps(['startAngle','endAngle','outerRadius','innerRadius','x','y'],true);
+      const mid=(p.startAngle+p.endAngle)/2;
+      if(pct>=6){
+        const r=(p.outerRadius+p.innerRadius)/2;
+        const x=p.x+Math.cos(mid)*r, y=p.y+Math.sin(mid)*r;
+        ctx.fillStyle=textOnColor(ds.backgroundColor[i]);
+        ctx.font="700 12px 'Pretendard',sans-serif";
+        ctx.fillText(label, x, y-6);
+        ctx.font="600 10px 'Pretendard',sans-serif";
+        ctx.fillText(sub+pct.toFixed(0)+'%', x, y+7);
+      }else{
+        const r=p.outerRadius+11;
+        const x=p.x+Math.cos(mid)*r, y=p.y+Math.sin(mid)*r;
+        ctx.fillStyle=ds.backgroundColor[i];
+        ctx.font="700 10.5px 'Pretendard',sans-serif";
+        ctx.fillText(sub+label+' '+pct.toFixed(0)+'%', x, y);
+      }
+    });
+    ctx.restore();
+  }
+};
 
 function renderOrdSize(){
   if(state.brand==='ALL') return;   // 카드가 숨겨져 있으므로 계산도 건너뜀
@@ -2017,14 +2093,57 @@ function renderOrdSize(){
   const target = useAll ? rows : sized;
   const excluded = useAll ? [] : rows.filter(r=>!isNumericSize(r.size));
 
-  const g=groupSum(target,'size',vf);
-  const both=groupBoth(target,'size');
-  const labels=sortSizes(Object.keys(g));
-  const colors=labels.map((_,i)=> labels.length<=1 ? SIZE_RAMP[7]
-                : SIZE_RAMP[Math.round(i/(labels.length-1)*(SIZE_RAMP.length-1))]);
+  /* [2026-08-24] 성별이 둘 이상이면 사이즈를 성별로 나눕니다.
+     바오지처럼 남성화·여성화를 같이 파는 브랜드는 "240"이 두 개의 다른 상품이라,
+     합쳐 놓으면 어느 쪽 240을 더 만들어야 하는지 판단이 안 됩니다(사용자 요청).
+     조각 순서는 남성 사이즈 오름차순 → 여성 사이즈 오름차순, 색은 성별마다 다른 계열입니다. */
+  const genders=[...new Set(target.map(r=>String(r.gender||'').trim()).filter(v=>v))];
+  const splitByGender = genders.length>1;
+  const keyed = target.map(r=>({...r,
+    _k: splitByGender ? (String(r.gender||'기타').trim()+'|'+r.size) : String(r.size) }));
+
+  const g=groupSum(keyed,'_k',vf);
+  const both=groupBoth(keyed,'_k');
+  const gOf = k => splitByGender ? k.split('|')[0] : '';
+  const sOf = k => splitByGender ? k.split('|').slice(1).join('|') : k;
+  const gRank = gg => { const i=GENDER_ORDER.indexOf(gg); return i<0 ? 99 : i; };
+
+  const keys=Object.keys(g).sort((a,b)=>{
+    if(splitByGender){
+      const ga=gOf(a), gb=gOf(b);
+      if(ga!==gb) return (gRank(ga)-gRank(gb)) || ga.localeCompare(gb,'ko');
+    }
+    return sizeCmp(sOf(a), sOf(b));
+  });
+
+  // 성별 그룹 안에서 작은 사이즈 → 큰 사이즈로 진해지도록 색을 배분
+  const perGender={};
+  keys.forEach(k=>{ const gg=gOf(k); (perGender[gg]=perGender[gg]||[]).push(k); });
+  const colorOf={};
+  Object.entries(perGender).forEach(([gg,ks])=>{
+    const ramp = GENDER_RAMP[gg] || (splitByGender ? SIZE_RAMP_X : SIZE_RAMP);
+    ks.forEach((k,i)=>{ colorOf[k] = ks.length<=1 ? ramp[7] : ramp[Math.round(i/(ks.length-1)*(ramp.length-1))]; });
+  });
+
+  const labels=keys.map(sOf);
+  const colors=keys.map(k=>colorOf[k]);
+  const subs=keys.map(k=>splitByGender ? GENDER_SHORT(gOf(k)) : '');
 
   document.getElementById('o-sizeDesc').textContent =
-    useAll ? '어느 사이즈가 잘 나가나? (크기순)' : '어느 사이즈가 잘 나가나? (신발 사이즈만, 크기순)';
+    (useAll ? '어느 사이즈가 잘 나가나? (크기순)' : '어느 사이즈가 잘 나가나? (신발 사이즈만, 크기순)')
+    + (splitByGender ? ' · 성별 구분' : '');
+
+  // 성별 색 안내 - 도넛 위쪽에 두 칸짜리로만 (조각 라벨이 있으니 사이즈 범례는 필요 없음)
+  const keyEl=document.getElementById('o-sizeKey');
+  if(keyEl){
+    if(splitByGender){
+      keyEl.style.display='';
+      keyEl.innerHTML = Object.keys(perGender).sort((a,b)=>gRank(a)-gRank(b)).map(gg=>{
+        const ramp=GENDER_RAMP[gg]||SIZE_RAMP_X;
+        return `<span class="skey"><i style="background:${ramp[7]}"></i>${escAttr(gg)}</span>`;
+      }).join('');
+    }else{ keyEl.style.display='none'; keyEl.innerHTML=''; }
+  }
 
   const noteEl=document.getElementById('o-sizeNote');
   if(excluded.length>0){
@@ -2037,14 +2156,24 @@ function renderOrdSize(){
   }
 
   // 크기순·색상 램프를 유지해야 해서 공용 함수(값 큰 순 + 고정 팔레트)를 안 쓰고 직접 그립니다.
-  const total=labels.reduce((a,l)=>a+(g[l]||0),0);
+  // [2026-08-24] 아래 범례 대신 조각 위에 직접 라벨을 찍습니다(donutSliceLabels).
+  // 사이즈가 10개쯤 되면 범례가 두 줄을 먹고, 색과 숫자를 눈으로 짝지어야 해서 읽기 어려웠습니다.
+  const total=keys.reduce((a,k)=>a+(g[k]||0),0);
   mk('o-ch-size',{type:'doughnut',
-    data:{labels,datasets:[{data:labels.map(l=>g[l]),backgroundColor:colors,borderColor:'#FFFFFF',borderWidth:2,hoverOffset:6}]},
-    options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
-      onClick:(e,el)=>{if(el.length)setOrdDrill('size',labels[el[0].index]);},
-      plugins:{legend:{position:'bottom',labels:{boxWidth:10,boxHeight:10,padding:6,font:{size:10}}},
-        tooltip:{...tip,callbacks:{title:c=>c[0].label+' 사이즈',
-          label:c=>breakdownTooltipLabel(c, both, total)}}}}});
+    data:{labels,datasets:[{data:keys.map(k=>g[k]),backgroundColor:colors,
+      borderColor:'#FFFFFF',borderWidth:2,hoverOffset:6,_sub:subs}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'58%',
+      // 조각 바깥 라벨이 잘리지 않도록 사방에 여백을 둡니다
+      layout:{padding:{top:14,bottom:14,left:22,right:22}},
+      // 클릭하면 그 사이즈로 드릴다운 (성별로 나뉘어 있어도 드릴은 사이즈 기준)
+      onClick:(e,el)=>{if(el.length)setOrdDrill('size',sOf(keys[el[0].index]));},
+      plugins:{legend:{display:false},
+        tooltip:{...tip,callbacks:{
+          title:c=>{ const k=keys[c[0].dataIndex];
+                     return (splitByGender ? gOf(k)+' ' : '')+sOf(k)+' 사이즈'; },
+          label:c=>{ const k=keys[c.dataIndex];
+                     return breakdownTooltipLabelByKey(c, both, total, k); }}}}},
+    plugins:[donutSliceLabels]});
 }
 function renderOrdTop(){
   const rows=ordFilteredRows();
