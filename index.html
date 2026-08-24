@@ -141,6 +141,29 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .kpi .k-label{font-size:11px;color:var(--text-tertiary);font-weight:600;}
 .kpi .k-val{font-size:19px;font-weight:700;margin-top:7px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .kpi .k-sub{font-size:11px;color:var(--text-tertiary);margin-top:5px;}
+/* [2026-08-21] KPI 증감율 - 직전 동일기간 대비 */
+.kpi .k-delta{font-size:11px;font-weight:600;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.kpi .k-delta .base{font-weight:400;color:var(--text-tertiary);}
+.k-delta.up{color:var(--color-success-fg);}
+.k-delta.down{color:var(--color-error-fg);}
+.k-delta.new{color:var(--color-info-fg);}
+.k-delta.none{color:var(--text-tertiary);font-weight:400;}
+
+/* [2026-08-21] 브랜드별 비교표 - 사이드바가 '전체 브랜드'일 때만 나타남 */
+#o-brandCmp table{white-space:nowrap;}
+#o-brandCmp thead th{cursor:default;}
+#o-brandCmp th.num{text-align:right;}
+#o-brandCmp tbody tr.clickable{cursor:pointer;}
+#o-brandCmp tbody tr.sumrow td{background:rgba(17,17,17,.035);font-weight:700;color:var(--text-primary);border-top:1px solid var(--border-strong);}
+#o-brandCmp tbody tr.sumrow:hover td{background:rgba(17,17,17,.035);}
+.share-bar{display:inline-block;width:54px;height:6px;border-radius:3px;background:rgba(17,17,17,.10);
+  vertical-align:middle;margin-right:6px;position:relative;overflow:hidden;}
+.share-bar i{position:absolute;left:0;top:0;bottom:0;background:var(--color-primary-500);}
+.delta{font-weight:600;}
+.delta.up{color:var(--color-success-fg);}
+.delta.down{color:var(--color-error-fg);}
+.delta.new{color:var(--color-info-fg);}
+.delta.none{color:var(--text-tertiary);font-weight:400;}
 
 .card{background:var(--bg-elevated);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:18px;}
 .card h3{margin:0 0 4px;font-size:15px;font-weight:700;}
@@ -172,6 +195,15 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .msel-item input{flex-shrink:0;}
 .msel-allitem{font-weight:600;}
 .msel-sep{height:1px;background:var(--border-default);margin:4px 2px;}
+/* [2026-08-24] "선택 없음" 상태를 눈에 띄게 - 결과가 0건인데 원인이 안 보이던 문제 */
+.msel-btn.empty{border-color:var(--color-error-fg);color:var(--color-error-fg);background:rgba(212,47,82,.06);font-weight:600;}
+.msel-none{padding:8px 8px 6px;font-size:11.5px;color:var(--text-tertiary);line-height:1.6;}
+.filter-warn{flex-basis:100%;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:2px;
+  background:rgba(212,47,82,.08);border:1px solid rgba(212,47,82,.25);border-radius:var(--radius-md);
+  padding:10px 12px;font-size:12px;color:var(--color-error-fg);font-weight:600;}
+.filter-warn .btn-fix{font:600 11.5px/1 'Pretendard',sans-serif;border:1px solid var(--color-error-fg);
+  background:#fff;color:var(--color-error-fg);border-radius:var(--radius-full);padding:7px 13px;cursor:pointer;}
+.filter-warn .btn-fix:hover{background:var(--color-error-fg);color:#fff;}
 
 .drill{display:none;align-items:center;gap:10px;background:rgba(44,75,184,.10);border:1px solid var(--color-primary-300);
   border-radius:var(--radius-full);padding:8px 14px;margin-bottom:14px;font-size:12px;color:var(--text-secondary);}
@@ -507,11 +539,13 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
     <div class="sb-sep"></div>
 
     <div class="tabs">
-      <button class="tab-btn" data-tab="ord" title="주문 분석">
+      <!-- [2026-08-21] 첫 화면을 '주문 분석'으로 변경(사용자 요청). 여기 active를 옮길 때
+           아래 view-ord / view-inv의 on 클래스도 반드시 같이 옮겨야 합니다. -->
+      <button class="tab-btn active" data-tab="ord" title="주문 분석">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
         <span class="t-label">주문 분석</span>
       </button>
-      <button class="tab-btn active" data-tab="inv" title="재고 / 발주 현황">
+      <button class="tab-btn" data-tab="inv" title="재고 / 발주 현황">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>
         <span class="t-label">재고 / 발주</span>
       </button>
@@ -525,7 +559,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
   <div id="dash">
 
     <!-- ══════════════════ 재고/발주 현황 ══════════════════ -->
-    <div class="view on" id="view-inv">
+    <div class="view" id="view-inv">
       <section class="filters" id="filters-inv">
         <!-- 브랜드는 왼쪽 사이드바로 옮겼습니다(전체 탭 공통). 아래 select는 화면에는 안 보이지만
              기존 필터/즐겨찾기/내보내기 코드가 그대로 참조하므로 DOM에는 남겨 둡니다. -->
@@ -540,6 +574,8 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
           <button class="btn-reset" id="i-favDeleteBtn">즐겨찾기 삭제</button>
           <button class="btn-reset" id="i-resetBtn">필터 초기화</button>
         </div>
+        <!-- [2026-08-24] "선택 없음" 때문에 결과가 0건이 됐을 때 원인과 복구 버튼을 같이 보여줍니다 -->
+        <div class="filter-warn" id="i-filterWarn" style="display:none;"></div>
       </section>
 
       <section class="kpi-row" id="i-kpiRow"></section>
@@ -579,7 +615,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
     </div>
 
     <!-- ══════════════════ 주문 분석 ══════════════════ -->
-    <div class="view" id="view-ord">
+    <div class="view on" id="view-ord">
       <section class="filters" id="filters-ord">
         <div class="fl" style="min-width:300px;">
           <label>기간</label>
@@ -609,12 +645,14 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
         <div class="fl"><label>판매처</label><div class="msel" id="o-channel"></div></div>
         <div class="fl"><label>출고유형</label><div class="msel" id="o-type"></div></div>
         <div class="fl"><label>성별</label><div class="msel" id="o-gender"></div></div>
+        <div class="fl"><label>사이즈</label><div class="msel" id="o-size"></div></div>
         <div class="fl"><label>즐겨찾기</label><select id="o-favSelect"><option value="">선택...</option></select></div>
         <div class="reset">
           <button class="btn-reset" id="o-favSaveBtn">현재 조건 저장</button>
           <button class="btn-reset" id="o-favDeleteBtn">즐겨찾기 삭제</button>
           <button class="btn-reset" id="o-resetBtn">필터 초기화</button>
         </div>
+        <div class="filter-warn" id="o-filterWarn" style="display:none;"></div>
       </section>
 
       <!-- [2026-07-29 변경] 수량/매출 보기기준 토글 제거 - 계정 유형(가격 데이터 보유 여부)에 따라
@@ -625,6 +663,19 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
       </div>
 
       <section class="kpi-row" id="o-kpiRow"></section>
+
+      <!-- [2026-08-21] 브랜드별 비교 - 사이드바가 '전체 브랜드'일 때만 표시됩니다.
+           카테고리/라인업은 브랜드 안쪽의 하위 분류라, 전체 브랜드 상태에서 그것부터 보면
+           "어느 브랜드가 커서 그런 건지"가 안 보입니다. 그래서 상위 계층인 브랜드를 먼저 두고,
+           행을 누르면 그 브랜드로 내려가 아래 카테고리/라인업 분석을 보게 하는 구조입니다. -->
+      <section class="section card" id="o-brandCmp" style="display:none;">
+        <h3>브랜드별 비교</h3>
+        <p class="q" id="o-brandCmpDesc">어느 브랜드가 얼마나 팔았나? (행을 누르면 그 브랜드로 내려갑니다)</p>
+        <div class="tbl-scroll" style="max-height:none;">
+          <table><thead id="o-brandCmpHead"></thead><tbody id="o-brandCmpBody"></tbody></table>
+        </div>
+        <div class="q" id="o-brandCmpNote" style="margin:10px 0 0;display:none;"></div>
+      </section>
 
       <section class="section card chart-section trend-card">
         <h3 id="o-trendTitle">일별 판매수량·매출 추이</h3><p class="q" id="o-trendDesc">시간에 따른 출고량과 매출 흐름은? (막대=수량, 선=매출)</p>
@@ -792,7 +843,7 @@ const state = {
   brand:'ALL',
   inv:[], ord:[],
   invFilters:{brand:'ALL',category:'ALL',model:'ALL',gender:'ALL',onlyNeed:false}, invSearch:'', invSort:{col:'needOrder',dir:-1},
-  ordFilters:{brand:'ALL',category:'ALL',model:'ALL',channel:'ALL',type:'ALL',gender:'ALL'}, ordSearch:'', ordSort:{col:'date',dir:-1}, ordDrills:[],
+  ordFilters:{brand:'ALL',category:'ALL',model:'ALL',channel:'ALL',type:'ALL',size:'ALL',gender:'ALL'}, ordSearch:'', ordSort:{col:'date',dir:-1}, ordDrills:[],
   ordPeriod:{preset:'last1m', from:'', to:''}, ordMetric:'qty',
   charts:{}, refreshTimer:null, openMsel:null,
   promo:{rows:[], warnings:[], detailByName:{}, loaded:false, calYear:new Date().getFullYear(), calMonth:new Date().getMonth(), ganttRange:'active'},
@@ -1124,18 +1175,62 @@ function fillSelect(id,opts,cur,allLabel){
 // 빈 배열([])은 "전체"를 의미한다.
 // 'ALL'(문자열 상수) = 전체선택 상태, 배열 = 정확히 그 값들만(빈 배열이면 전부 해제=하나도 없음)
 function msMatch(sel, val){ return sel==='ALL' || (Array.isArray(sel) && sel.includes(val)); }
+
+/* [2026-08-24] 선택지 목록을 만들 때만 쓰는 짝꿍 함수.
+   빈 배열(=선택 없음)은 "전체"로 취급합니다.
+   이유: 「전체」 체크박스를 실수로 한 번 잘못 눌러 선택이 비어버리면 결과가 0건이 되고,
+   선택지 목록도 결과에서 뽑기 때문에 다른 필터의 드롭다운까지 텅 비어버립니다.
+   그러면 다시 고를 항목 자체가 없어서 필터 초기화 말고는 되돌릴 방법이 없어집니다
+   (실제 사용자 제보: "클릭 미스로 선택없음이 됐는데 드롭박스에 다른 선택지가 안 나온다").
+   비어 있는 선택은 정보가 없는 고장난 상태이므로, 목록을 만들 때는 무시합니다.
+   ※ 실제 데이터를 거르는 msMatch는 그대로 둡니다 - 화면 숫자는 선택 그대로 반영돼야 하므로. */
+function msMatchOpts(sel, val){ return sel==='ALL' || !Array.isArray(sel) || sel.length===0 || sel.includes(val); }
+
+// 사이즈 정렬 - 신발 사이즈(235/240/…)는 숫자 크기순, 텍스트(블랙/원형/3m 등)는 뒤에 가나다순.
+// 기본 sort()는 문자열 비교라 "100, 235, 90" 처럼 뒤죽박죽이 됨.
+function sortSizes(arr){
+  const isNum = v => /^\d+(\.\d+)?$/.test(String(v).trim());
+  return arr.slice().sort((a,b)=>{
+    const an=isNum(a), bn=isNum(b);
+    if(an&&bn) return parseFloat(a)-parseFloat(b);
+    if(an) return -1;
+    if(bn) return 1;
+    return String(a).localeCompare(String(b),'ko');
+  });
+}
 function buildMultiSelect(containerId, filtersObj, field, opts, allLabel, onChange){
   const box=document.getElementById(containerId);
-  if(Array.isArray(filtersObj[field])) filtersObj[field] = filtersObj[field].filter(v=>opts.includes(v));
+
+  /* [2026-08-24 버그수정] "선택 없음"으로 굳어서 아무것도 안 나오는 현상.
+     ────────────────────────────────────────────────────────────
+     증상: 출고유형·성별이 동시에 "선택 없음"이 되고 목록도 텅 비어서, 체크할 항목이
+           없으니 스스로 빠져나올 수 없고 KPI가 전부 0으로 표시됨.
+     원인: 아래 filter()는 "지금 데이터에 없는 값"을 골라낸 선택지에서 지워줍니다.
+           그런데 기간을 좁히거나 브랜드를 바꾸면 골라둔 값이 통째로 사라질 수 있고,
+           그러면 배열이 []가 됩니다. []는 "아무것도 안 보여줌"이라 결과가 0건이 되는데,
+           선택지 목록(opts)도 필터 결과에서 뽑기 때문에 다른 필터의 목록까지 0개가 되고,
+           그 필터도 []가 되면서 연쇄로 무너집니다(그래서 두 개가 같이 비었던 것).
+     수정: 사용자가 직접 해제한 게 아니라 "데이터가 사라져서" 비게 된 경우에는
+           빈 배열로 두지 않고 전체선택(ALL)으로 되돌립니다. 이러면 연쇄가 시작되지 않습니다.
+           사용자가 스스로 전부 해제한 경우(before가 이미 빈 배열)는 의도로 보고 그대로 둡니다. */
+  if(Array.isArray(filtersObj[field])){
+    const before = filtersObj[field];
+    const after  = before.filter(v=>opts.includes(v));
+    filtersObj[field] = (before.length>0 && after.length===0) ? 'ALL' : after;
+  }
+
   const cur=filtersObj[field];
   const isAll = cur==='ALL';
   const label = isAll ? allLabel : (cur.length===0 ? '선택 없음' : (cur.length<=2 ? cur.join(', ') : `${cur.length}개 선택`));
+  const isEmpty = !isAll && cur.length===0;
   box.innerHTML = `
-    <button type="button" class="msel-btn">${escAttr(label)}<span class="msel-ar">▾</span></button>
+    <button type="button" class="msel-btn${isEmpty?' empty':''}">${escAttr(label)}<span class="msel-ar">▾</span></button>
     <div class="msel-panel">
       <label class="msel-item msel-allitem"><input type="checkbox" data-all="1" ${isAll?'checked':''}/>${allLabel}</label>
       <div class="msel-sep"></div>
-      ${opts.map(o=>`<label class="msel-item"><input type="checkbox" value="${escAttr(o)}" ${(isAll||cur.includes(o))?'checked':''}/>${escAttr(String(o))}</label>`).join('')}
+      ${opts.length===0
+        ? `<div class="msel-none">지금 조건에서는 고를 항목이 없습니다.<br>위 「${escAttr(allLabel)}」를 체크하거나 다른 필터를 푸세요.</div>`
+        : opts.map(o=>`<label class="msel-item"><input type="checkbox" value="${escAttr(o)}" ${(isAll||cur.includes(o))?'checked':''}/>${escAttr(String(o))}</label>`).join('')}
     </div>`;
   const panel = box.querySelector('.msel-panel');
   if(state.openMsel===containerId) panel.classList.add('open');
@@ -1167,6 +1262,26 @@ function buildMultiSelect(containerId, filtersObj, field, opts, allLabel, onChan
 document.addEventListener('click', e=>{
   if(!e.target.closest('.msel')){ state.openMsel=null; document.querySelectorAll('.msel-panel.open').forEach(p=>p.classList.remove('open')); }
 });
+
+/* [2026-08-24] "선택 없음" 필터 경고줄
+   결과가 0건일 때 예전에는 표에 "조건에 맞는 데이터가 없습니다"만 떠서, 어느 필터 때문인지
+   찾으려면 6개를 하나씩 열어봐야 했습니다. 원인 필터 이름을 직접 적어주고 한 번에 푸는
+   버튼을 답니다. */
+function renderFilterWarn(tab, filtersObj, fieldLabels, rebuild, render){
+  const el=document.getElementById(tab+'-filterWarn');
+  if(!el) return;
+  const empties = Object.keys(fieldLabels).filter(f=>Array.isArray(filtersObj[f]) && filtersObj[f].length===0);
+  if(empties.length===0){ el.style.display='none'; el.innerHTML=''; return; }
+  const names = empties.map(f=>fieldLabels[f]).join(', ');
+  el.style.display='';
+  el.innerHTML = `<span>${escAttr(names)} 필터가 「선택 없음」이라 결과가 0건입니다.</span>`+
+                 `<button type="button" class="btn-fix">${escAttr(names)} 전체로 되돌리기</button>`;
+  el.querySelector('.btn-fix').addEventListener('click',()=>{
+    empties.forEach(f=>{ filtersObj[f]='ALL'; });
+    state.openMsel=null;
+    rebuild(); render();
+  });
+}
 function groupSum(rows,field,valField){ const m={};
   rows.forEach(r=>{const k=r[field]||'(미지정)'; m[k]=(m[k]||0)+(valField?r[valField]:1);});
   return m; }
@@ -1255,13 +1370,14 @@ document.addEventListener('click', e=>{
 /* ════════════════════════════════════════════════════════
    ① 재고 / 발주 현황
 ════════════════════════════════════════════════════════ */
+// 선택지 목록 전용(화면 숫자 계산에는 안 쓰임) - 그래서 msMatchOpts를 씁니다.
 function invRowsExcept(excludeKeys){
   const f=state.invFilters;
   return state.inv.filter(r=>
     (excludeKeys.includes('brand')||f.brand==='ALL'||r.brand===f.brand) &&
     (excludeKeys.includes('category')||f.category==='ALL'||r.category===f.category) &&
-    (excludeKeys.includes('model')||msMatch(f.model,r.model)) &&
-    (excludeKeys.includes('gender')||msMatch(f.gender,r.gender)) &&
+    (excludeKeys.includes('model')||msMatchOpts(f.model,r.model)) &&
+    (excludeKeys.includes('gender')||msMatchOpts(f.gender,r.gender)) &&
     (!f.onlyNeed || r.needOrder));
 }
 function buildInvFilters(){
@@ -1279,7 +1395,10 @@ function invFilteredRows(){
     msMatch(f.model,r.model) && msMatch(f.gender,r.gender) &&
     (!f.onlyNeed || r.needOrder));
 }
-function renderInv(){ renderInvKPI(); renderInvCat(); renderInvTop(); renderInvTable(); }
+function renderInv(){
+  renderFilterWarn('i', state.invFilters, {model:'모델명', gender:'성별'}, buildInvFilters, renderInv);
+  renderInvKPI(); renderInvCat(); renderInvTop(); renderInvTable();
+}
 
 function renderInvKPI(){
   const rows=invFilteredRows();
@@ -1383,6 +1502,7 @@ document.getElementById('i-searchBox').addEventListener('input',e=>{state.invSea
 setupFavControls('i',
   ()=>({filters:{...state.invFilters}, search:state.invSearch}),
   (saved)=>{ state.invFilters={...saved.filters}; state.invSearch=saved.search||''; document.getElementById('i-searchBox').value=state.invSearch;
+    ['category','model','gender'].forEach(k=>{ if(state.invFilters[k]===undefined) state.invFilters[k]='ALL'; });
     // 예전에 저장해 둔 즐겨찾기에도 브랜드가 들어 있지만, 브랜드는 이제 사이드바가 주인이라
     // 즐겨찾기를 불러와도 사이드바에 보이는 브랜드가 그대로 유지되도록 덮어씁니다
     // (그러지 않으면 사이드바는 '전체'인데 표만 특정 브랜드로 바뀌어 원인을 찾기 어려워집니다).
@@ -1454,6 +1574,7 @@ function computeOrdPeriodRange(){
     default: return [null,null];
   }
 }
+// 선택지 목록 전용(화면 숫자 계산에는 안 쓰임) - 그래서 msMatchOpts를 씁니다.
 function ordRowsExcept(excludeKeys){
   const f=state.ordFilters;
   const [pFrom,pTo]=computeOrdPeriodRange();
@@ -1461,10 +1582,11 @@ function ordRowsExcept(excludeKeys){
     (!pFrom||r.date>=pFrom) && (!pTo||r.date<=pTo) &&
     (excludeKeys.includes('brand')||f.brand==='ALL'||r.brand===f.brand) &&
     (excludeKeys.includes('category')||f.category==='ALL'||r.category===f.category) &&
-    (excludeKeys.includes('model')||msMatch(f.model,r.model)) &&
-    (excludeKeys.includes('channel')||msMatch(f.channel,r.channel)) &&
-    (excludeKeys.includes('type')||msMatch(f.type,r.type)) &&
-    (excludeKeys.includes('gender')||msMatch(f.gender,r.gender)));
+    (excludeKeys.includes('model')||msMatchOpts(f.model,r.model)) &&
+    (excludeKeys.includes('channel')||msMatchOpts(f.channel,r.channel)) &&
+    (excludeKeys.includes('type')||msMatchOpts(f.type,r.type)) &&
+    (excludeKeys.includes('size')||msMatchOpts(f.size,r.size)) &&
+    (excludeKeys.includes('gender')||msMatchOpts(f.gender,r.gender)));
 }
 function buildOrdFilters(){
   fillSelect('o-brand',uniq(ordRowsExcept(['brand']),'brand').sort(),state.ordFilters.brand,'전체 브랜드');
@@ -1473,19 +1595,65 @@ function buildOrdFilters(){
   buildMultiSelect('o-channel',state.ordFilters,'channel',uniq(ordRowsExcept(['channel']),'channel').sort(),'전체 판매처',()=>{clearOrdDrillSilent();buildOrdFilters();renderOrd();});
   buildMultiSelect('o-type',state.ordFilters,'type',uniq(ordRowsExcept(['type']),'type').sort(),'전체 유형',()=>{clearOrdDrillSilent();buildOrdFilters();renderOrd();});
   buildMultiSelect('o-gender',state.ordFilters,'gender',uniq(ordRowsExcept(['gender']),'gender').sort(),'전체 성별',()=>{clearOrdDrillSilent();buildOrdFilters();renderOrd();});
+  // [2026-08-24 추가] 사이즈 - 신발 사이즈가 숫자 크기순으로 나오도록 sortSizes 사용
+  buildMultiSelect('o-size',state.ordFilters,'size',sortSizes(uniq(ordRowsExcept(['size']),'size')),'전체 사이즈',()=>{clearOrdDrillSilent();buildOrdFilters();renderOrd();});
   renderPeriodButtons();
 }
-function ordFilteredRows(){
+// [2026-08-21] 기간만 바꿔 끼울 수 있게 분리했습니다. 증감율은 "같은 필터 + 다른 기간"으로
+// 두 번 집계해야 하는데, 예전엔 기간이 함수 안에 박혀 있어서 직전 기간을 뽑을 수가 없었습니다.
+function ordRowsInRange(pFrom,pTo){
   const f=state.ordFilters;
-  const [pFrom,pTo]=computeOrdPeriodRange();
   return state.ord.filter(r=>
     (!pFrom||r.date>=pFrom) && (!pTo||r.date<=pTo) &&
     (f.brand==='ALL'||r.brand===f.brand) &&
     (f.category==='ALL'||r.category===f.category) && msMatch(f.model,r.model) &&
     msMatch(f.channel,r.channel) && msMatch(f.type,r.type) &&
-    msMatch(f.gender,r.gender));
+    msMatch(f.size,r.size) && msMatch(f.gender,r.gender));
 }
-function renderOrd(){ renderOrdKPI(); renderOrdTrend(); renderOrdCat(); renderOrdModel(); renderOrdChannel(); renderOrdType(); renderOrdTop(); renderOrdTable(); }
+function ordFilteredRows(){
+  const [pFrom,pTo]=computeOrdPeriodRange();
+  return ordRowsInRange(pFrom,pTo);
+}
+
+/* ── 증감율(직전 동일기간 대비) ──────────────────────────────
+   지금 보고 있는 기간과 "같은 길이"로 바로 앞 구간을 잡습니다.
+   최근 7일 → 그 이전 7일, 오늘 → 어제, 직접입력 → 그 앞의 같은 일수.
+   달 단위 프리셋(최근 1개월 등)도 실제 일수만큼 앞으로 미는 방식이라
+   28/30/31일 차이 없이 항상 같은 길이끼리 비교됩니다.
+   기간이 '전체'면 비교할 앞 구간이 없으므로 증감율을 아예 표시하지 않습니다. */
+function computeOrdPrevRange(){
+  const [pFrom,pTo]=computeOrdPeriodRange();
+  if(!pFrom||!pTo) return [null,null];
+  const span = pTo.getTime()-pFrom.getTime();
+  const prevTo = new Date(pFrom.getTime()-1);
+  const prevFrom = new Date(prevTo.getTime()-span);
+  return [prevFrom, prevTo];
+}
+function prevPeriodLabel(){
+  const [pFrom,pTo]=computeOrdPeriodRange();
+  if(!pFrom||!pTo) return '';
+  if(state.ordPeriod.preset==='today') return '어제';
+  if(state.ordPeriod.preset==='yesterday') return '그제';
+  const days=Math.max(1, Math.round((pTo.getTime()-pFrom.getTime())/86400000));
+  return '직전 '+fmtNum(days)+'일';
+}
+// 증감율을 화면에 바로 쓸 수 있는 {cls, txt}로 변환.
+// 직전 기간이 0인데 지금 값이 있으면 나눗셈이 불가능(무한대)하므로 '신규'로 표기합니다
+//  - 2026년 안전화/운동화 브랜드처럼 중간에 새로 들어온 경우가 여기 해당합니다.
+function calcDelta(cur, prev, comparable){
+  if(!comparable) return {cls:'none', txt:''};
+  if(prev===0 && cur===0) return {cls:'none', txt:'-'};
+  if(prev===0) return {cls:'new', txt:'신규'};
+  const p=(cur-prev)/Math.abs(prev)*100;
+  const r=Math.abs(p)>=100 ? p.toFixed(0) : p.toFixed(1);
+  return {cls: p>0?'up':(p<0?'down':'none'), txt:(p>0?'+':'')+r+'%'};
+}
+
+function renderOrd(){
+  renderFilterWarn('o', state.ordFilters, {model:'모델명', channel:'판매처', type:'출고유형', gender:'성별', size:'사이즈'},
+                   ()=>{ clearOrdDrillSilent(); buildOrdFilters(); }, renderOrd);
+  renderOrdKPI(); renderOrdBrandCmp(); renderOrdTrend(); renderOrdCat(); renderOrdModel(); renderOrdChannel(); renderOrdType(); renderOrdTop(); renderOrdTable();
+}
 
 function ordValField(){ return state.ordMetric==='amount' ? 'amount' : 'qty'; }
 function ordUnit(){ return state.ordMetric==='amount' ? '원' : '개'; }
@@ -1516,16 +1684,136 @@ function renderOrdKPI(){
   const expRows=rows.filter(r=>r.type==='체험단'), normRows=rows.filter(r=>r.type==='일반판매');
   const expQty=expRows.reduce((a,r)=>a+r.qty,0), expAmt=expRows.reduce((a,r)=>a+r.amount,0);
   const normQty=normRows.reduce((a,r)=>a+r.qty,0), normAmt=normRows.reduce((a,r)=>a+r.amount,0);
+  // ── [2026-08-21] 직전 동일기간 대비 증감율 ──
+  // 비교는 큰 숫자와 같은 기준으로 해야 헷갈리지 않으므로, 지금 토글된 지표(매출/수량)로 계산합니다.
+  const [prevFrom,prevTo]=computeOrdPrevRange();
+  const comparable=!!(prevFrom&&prevTo);
+  const prevRows = comparable ? ordRowsInRange(prevFrom,prevTo) : [];
+  const baseLabel = prevPeriodLabel();
+  const vf = ordValField();
+  const sumBy=(rs,f)=>rs.reduce((a,r)=>a+(f(r)?r[vf]:0),0);
+  const any=()=>true, isNorm=r=>r.type==='일반판매', isExp=r=>r.type==='체험단';
+  const C={tot:sumBy(rows,any), norm:sumBy(rows,isNorm), exp:sumBy(rows,isExp),
+           cnt:rows.length, sku:new Set(rows.map(r=>r.code)).size};
+  const P={tot:sumBy(prevRows,any), norm:sumBy(prevRows,isNorm), exp:sumBy(prevRows,isExp),
+           cnt:prevRows.length, sku:new Set(prevRows.map(r=>r.code)).size};
+
   const cards=[
-    {label:'총 판매',...dualVal(totalQty,totalAmt)},
-    {label:'일반판매',...dualVal(normQty,normAmt)},
-    {label:'체험단',...dualVal(expQty,expAmt)},
-    {label:'거래 건수',main:fmtNum(rows.length)+'건'},
-    {label:'SKU 종류',main:fmtNum(new Set(rows.map(r=>r.code)).size)+'개'},
+    {label:'총 판매',...dualVal(totalQty,totalAmt), d:calcDelta(C.tot,P.tot,comparable)},
+    {label:'일반판매',...dualVal(normQty,normAmt), d:calcDelta(C.norm,P.norm,comparable)},
+    {label:'체험단',...dualVal(expQty,expAmt), d:calcDelta(C.exp,P.exp,comparable)},
+    {label:'거래 건수',main:fmtNum(rows.length)+'건', d:calcDelta(C.cnt,P.cnt,comparable)},
+    {label:'SKU 종류',main:fmtNum(C.sku)+'개', d:calcDelta(C.sku,P.sku,comparable)},
   ];
-  document.getElementById('o-kpiRow').innerHTML = cards.map(c=>
-    `<div class="kpi"><div class="k-label">${c.label}</div><div class="k-val">${c.main}</div>${c.sub?`<div class="k-sub">${c.sub}</div>`:''}</div>`).join('');
+  document.getElementById('o-kpiRow').innerHTML = cards.map(c=>{
+    const d=c.d||{cls:'none',txt:''};
+    let deltaHtml='';
+    if(d.txt==='-')      deltaHtml=`<div class="k-delta none">비교 데이터 없음</div>`;
+    else if(d.txt)       deltaHtml=`<div class="k-delta ${d.cls}">${d.txt}<span class="base"> ${escAttr(baseLabel)} 대비</span></div>`;
+    return `<div class="kpi"><div class="k-label">${c.label}</div><div class="k-val">${c.main}</div>`+
+           `${c.sub?`<div class="k-sub">${c.sub}</div>`:''}${deltaHtml}</div>`;
+  }).join('');
 }
+
+/* ════════════════════════════════════════════════════════
+   [2026-08-21] 브랜드별 비교표 - 사이드바가 '전체 브랜드'일 때만
+   ────────────────────────────────────────────────────────
+   막대차트가 아니라 표로 만든 이유: 브랜드 매출이 한쪽으로 크게 쏠려 있어서
+   (2026-08 기준 바오지 약 89%) 막대로 그리면 작은 브랜드가 선처럼 보여 읽을 수 없습니다.
+   표는 비중 %와 증감을 같이 보여줄 수 있어 쏠린 데이터에 적합합니다.
+════════════════════════════════════════════════════════ */
+function renderOrdBrandCmp(){
+  const box=document.getElementById('o-brandCmp');
+  if(!box) return;
+  // 특정 브랜드를 고른 상태에서는 이 표가 한 줄짜리가 되어 의미가 없습니다.
+  // 그때는 아래 카테고리/라인업 분석이 주인공이므로 통째로 숨깁니다.
+  const rows = state.brand==='ALL' ? ordFilteredRows() : [];
+  if(state.brand!=='ALL' || rows.length===0){ box.style.display='none'; return; }
+  box.style.display='';
+
+  const [prevFrom,prevTo]=computeOrdPrevRange();
+  const comparable=!!(prevFrom&&prevTo);
+  const prevRows = comparable ? ordRowsInRange(prevFrom,prevTo) : [];
+  const baseLabel = prevPeriodLabel();
+
+  const agg=rs=>{
+    const g={};
+    rs.forEach(r=>{
+      const b=r.brand||'(미지정)';
+      const o=g[b]||(g[b]={qty:0,amt:0,cnt:0,sku:new Set()});
+      o.qty+=r.qty; o.amt+=r.amount; o.cnt++; o.sku.add(r.code);
+    });
+    return g;
+  };
+  const A=agg(rows), P=agg(prevRows);
+  const vf=ordValField();
+  const valOf=o=>o ? (vf==='amount'?o.amt:o.qty) : 0;
+  const names=Object.keys(A).sort((a,b)=>valOf(A[b])-valOf(A[a]));
+  const total=names.reduce((a,n)=>a+valOf(A[n]),0);
+  const showAmt=state.hasPrice;
+
+  document.getElementById('o-brandCmpDesc').textContent =
+    comparable ? `어느 브랜드가 얼마나 팔았나? (증감은 ${baseLabel} 대비 · 행을 누르면 그 브랜드로 내려갑니다)`
+               : '어느 브랜드가 얼마나 팔았나? (기간이 「전체」라 비교할 직전 기간이 없습니다 · 행을 누르면 그 브랜드로 내려갑니다)';
+
+  document.getElementById('o-brandCmpHead').innerHTML =
+    `<tr><th>브랜드</th>${showAmt?'<th class="num">매출</th>':''}<th class="num">판매수량</th>` +
+    `<th class="num">비중</th><th class="num">증감</th><th class="num">거래 건수</th><th class="num">SKU 종류</th></tr>`;
+
+  const deltaCell=(cur,prev)=>{
+    const d=calcDelta(cur,prev,comparable);
+    return `<td class="num"><span class="delta ${d.cls}">${d.txt||'-'}</span></td>`;
+  };
+  const body = names.map(n=>{
+    const a=A[n], p=P[n];
+    const share = total>0 ? valOf(a)/total*100 : 0;
+    return `<tr class="clickable" data-brand="${escAttr(n)}" title="${escAttr(n)} 기준으로 보기">
+      <td style="color:var(--text-primary);font-weight:600;">${escAttr(n)}</td>
+      ${showAmt?`<td class="num">${fmtNum(a.amt)}원</td>`:''}
+      <td class="num">${fmtNum(a.qty)}개</td>
+      <td class="num"><span class="share-bar"><i style="width:${share.toFixed(1)}%"></i></span>${share.toFixed(1)}%</td>
+      ${deltaCell(valOf(a), valOf(p))}
+      <td class="num">${fmtNum(a.cnt)}건</td>
+      <td class="num">${fmtNum(a.sku.size)}개</td></tr>`;
+  }).join('');
+
+  // 합계 - 브랜드 합과 KPI의 총 판매가 같은지 눈으로 바로 확인할 수 있게 둡니다
+  const T={qty:0,amt:0,cnt:0,sku:new Set()}, TP={v:0};
+  names.forEach(n=>{ T.qty+=A[n].qty; T.amt+=A[n].amt; T.cnt+=A[n].cnt; A[n].sku.forEach(s=>T.sku.add(s)); });
+  Object.keys(P).forEach(n=>{ TP.v+=valOf(P[n]); });
+  const sumRow = `<tr class="sumrow">
+      <td>합계</td>
+      ${showAmt?`<td class="num">${fmtNum(T.amt)}원</td>`:''}
+      <td class="num">${fmtNum(T.qty)}개</td>
+      <td class="num">100.0%</td>
+      ${deltaCell(total, TP.v)}
+      <td class="num">${fmtNum(T.cnt)}건</td>
+      <td class="num">${fmtNum(T.sku.size)}개</td></tr>`;
+
+  document.getElementById('o-brandCmpBody').innerHTML = body + sumRow;
+
+  // 직전 기간에 없던 브랜드가 새로 들어오면 합계 증감율이 실제보다 좋아 보입니다.
+  // (예: 2026년 안전화/운동화 브랜드가 붙은 달 - 바오지는 +19%인데 전체는 +34%로 보임)
+  // 숫자를 손대는 대신, 그렇게 보이는 이유를 표 아래에 적어 오해를 막습니다.
+  const newcomers = names.filter(n => valOf(A[n])>0 && !(P[n] && valOf(P[n])>0));
+  const noteEl=document.getElementById('o-brandCmpNote');
+  if(comparable && newcomers.length>0 && newcomers.length<names.length){
+    noteEl.style.display='';
+    noteEl.textContent = `※ ${newcomers.join(', ')}이(가) ${baseLabel}에는 판매가 없던 브랜드입니다. `+
+                         `그만큼 합계 증감율이 실제보다 높게 보이니, 기존 브랜드의 증감은 각 행에서 확인해 주세요.`;
+  }else{
+    noteEl.style.display='none';
+  }
+}
+// 행 클릭 -> 사이드바 브랜드를 그 브랜드로 바꿔서 하위(카테고리/라인업) 분석으로 내려감
+document.getElementById('o-brandCmpBody').addEventListener('click',e=>{
+  const tr=e.target.closest('tr[data-brand]');
+  if(!tr) return;
+  const sel=document.getElementById('g-brand');
+  sel.value = tr.dataset.brand;
+  sel.dispatchEvent(new Event('change'));
+  window.scrollTo({top:0, behavior:'smooth'});
+});
 function renderOrdTrend(){
   const titleEl=document.getElementById('o-trendTitle'), descEl=document.getElementById('o-trendDesc');
   if(titleEl) titleEl.textContent = state.hasPrice ? '일별 판매수량·매출 추이' : '일별 판매수량 추이';
@@ -1801,7 +2089,7 @@ document.getElementById('o-dateTo').addEventListener('change',e=>{
 });
 document.getElementById('o-resetBtn').addEventListener('click',()=>{
   // 브랜드는 사이드바(전역) 값을 유지 - 위 재고탭과 같은 이유
-  state.ordFilters={brand:state.brand,category:'ALL',model:'ALL',channel:'ALL',type:'ALL',gender:'ALL'};
+  state.ordFilters={brand:state.brand,category:'ALL',model:'ALL',channel:'ALL',type:'ALL',size:'ALL',gender:'ALL'};
   state.ordPeriod={preset:'last1m',from:'',to:''};
   document.getElementById('o-dateFrom').value=''; document.getElementById('o-dateTo').value='';
   state.ordSearch=''; document.getElementById('o-searchBox').value='';
@@ -1814,6 +2102,12 @@ setupFavControls('o',
   (saved)=>{
     state.ordFilters={...saved.filters}; state.ordSearch=saved.search||''; document.getElementById('o-searchBox').value=state.ordSearch;
     state.ordFilters.brand = state.brand;   // 브랜드는 사이드바가 주인 (재고탭과 동일)
+    // [2026-08-24] 사이즈 필터가 생기기 전에 저장한 즐겨찾기에는 size 키가 없습니다.
+    // 그대로 두면 msMatch(undefined, ...)가 전부 false가 되어 결과가 0건이 되므로 'ALL'로 채웁니다.
+    // (앞으로 필터를 더 추가할 때도 여기에 같은 방어를 한 줄씩 넣어주세요.)
+    ['category','model','channel','type','size','gender'].forEach(k=>{
+      if(state.ordFilters[k]===undefined) state.ordFilters[k]='ALL';
+    });
     state.ordPeriod = saved.period ? {...saved.period} : {preset:'last1m',from:'',to:''};
     document.getElementById('o-dateFrom').value=state.ordPeriod.from||''; document.getElementById('o-dateTo').value=state.ordPeriod.to||'';
     clearOrdDrillSilent();
