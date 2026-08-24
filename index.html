@@ -174,10 +174,13 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .grid-2{display:grid;grid-template-columns:1.1fr 1.4fr;gap:14px;}
 .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
 .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}
-/* [2026-08-24] 주문분석 분해 차트가 4개 -> 5개(사이즈별 추가)가 되면서 필요해짐.
-   ※ 아래 반응형(@media 1100/680)과 인쇄(@media print)에도 .grid-5 규칙을 같이 넣어둘 것 -
+/* [2026-08-24] 주문분석 분해 차트 행.
+   6칸 그리드 + 카드별 span(JS가 지정)으로 "3개 한 줄" / "3+2 두 줄"을 모두 표현합니다.
+   5칸 고정(repeat(5,1fr))으로 두면 카드를 숨겼을 때 오른쪽이 비어버려서 6칸으로 바꿨습니다.
+   ※ 반응형(@media 1100/680)과 인쇄(@media print)에도 규칙을 같이 넣어둘 것 -
      인쇄에서 빠지면 A4 가로에서 1열로 무너집니다(.grid-4에서 이미 겪은 문제). */
-.grid-5{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;}
+.chart-row{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;align-items:start;}
+.chart-row > .card{grid-column:span 2;}   /* JS가 다시 지정하기 전 기본값 */
 
 .metric-toggle{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
 .metric-toggle-label{font-size:12px;font-weight:600;color:var(--text-tertiary);margin-right:2px;}
@@ -390,8 +393,10 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
 @keyframes spin{to{transform:rotate(360deg);}}
 #dash{flex:1;min-width:0;display:none;} #dash.on{display:block;}
 
-@media(max-width:1100px){.kpi-row{grid-template-columns:repeat(3,1fr);} .grid-2{grid-template-columns:1fr;} .grid-3{grid-template-columns:1fr;} .grid-4{grid-template-columns:repeat(2,1fr);} .grid-5{grid-template-columns:repeat(2,1fr);}}
-@media(max-width:680px){.grid-4{grid-template-columns:1fr;} .grid-5{grid-template-columns:1fr;}}
+@media(max-width:1100px){.kpi-row{grid-template-columns:repeat(3,1fr);} .grid-2{grid-template-columns:1fr;} .grid-3{grid-template-columns:1fr;} .grid-4{grid-template-columns:repeat(2,1fr);}
+  /* 좁은 화면에서는 span을 무시하고 2열로 강제 */
+  .chart-row{grid-template-columns:repeat(2,1fr);} .chart-row > .card{grid-column:auto !important;}}
+@media(max-width:680px){.grid-4{grid-template-columns:1fr;} .chart-row{grid-template-columns:1fr;}}
 @media(max-width:680px){.kpi-row{grid-template-columns:repeat(2,1fr);} .title h1{font-size:17px;}}
 
 /* [2026-08-04 추가] 인쇄 여백 축소. 기본 여백(브라우저 기본값 약 12~20mm)이 넓어서
@@ -443,7 +448,9 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
   .grid-2{grid-template-columns:1.1fr 1.4fr !important;}
   .grid-3{grid-template-columns:repeat(3,1fr) !important;}
   .grid-4{grid-template-columns:repeat(4,1fr) !important;}
-  .grid-5{grid-template-columns:repeat(5,1fr) !important;}
+  /* 카드별 span은 인라인 스타일이라 인쇄에도 그대로 살아 있으므로, 여기서는
+     6칸 그리드만 되살리면 화면과 똑같은 3+2 배치가 종이에도 나옵니다. */
+  .chart-row{grid-template-columns:repeat(6,1fr) !important;}
   .btn-file,.btn-logout,#fileInput,.live,.tabs,.reset,.search .ic{display:none !important;}
   .period{border:1px solid #888 !important; color:#111 !important;}
   .kpi,.filters,div.card{border:1.2px solid #555 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; break-inside:avoid;}
@@ -687,14 +694,25 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
         <div class="chart-box" style="height:210px;"><canvas id="o-ch-trend"></canvas></div>
       </section>
 
-      <section class="section grid-5">
+      <!-- [2026-08-24] 분해 차트 행.
+           · 6칸 그리드를 깔고 카드마다 span을 JS로 정합니다(layoutOrdChartRow).
+             카드 5개면 span 2,2,2 / 3,3 → 위 3개 + 아래 2개(3+2 배치),
+             카드 3개면 span 2,2,2 → 한 줄에 3개. 카드를 숨겨도 폭이 안 비뚤어집니다.
+           · 라인업·사이즈는 브랜드를 골랐을 때만 나옵니다 - 브랜드가 섞인 상태에서
+             라인업/사이즈를 비교하면 의미가 없기 때문입니다(사용자 판단). -->
+      <section class="section chart-row" id="o-chartRow">
         <div class="card">
           <h3>카테고리별 판매</h3><p class="q">어느 카테고리가 많이 나가나?</p>
           <div class="chart-box h-mid"><canvas id="o-ch-cat"></canvas></div>
         </div>
-        <div class="card">
+        <div class="card" id="o-card-model">
           <h3>라인업별 판매</h3><p class="q">모델명(라인업) 기준 비중 (상위 12개 + 기타)</p>
           <div class="chart-box h-mid"><canvas id="o-ch-model"></canvas></div>
+        </div>
+        <div class="card" id="o-card-size">
+          <h3>사이즈별 판매</h3><p class="q" id="o-sizeDesc">어느 사이즈가 잘 나가나?</p>
+          <div class="chart-box h-mid"><canvas id="o-ch-size"></canvas></div>
+          <p class="q" id="o-sizeNote" style="margin:8px 0 0;display:none;"></p>
         </div>
         <div class="card">
           <h3>판매처별 판매</h3><p class="q">어느 채널이 많이 파나?</p>
@@ -704,11 +722,10 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
           <h3>출고유형별 판매</h3><p class="q">일반판매 vs 체험단 vs 유투버</p>
           <div class="chart-box h-mid"><canvas id="o-ch-type"></canvas></div>
         </div>
-        <div class="card">
-          <h3>사이즈별 판매</h3><p class="q">어느 사이즈가 잘 나가나? (크기순)</p>
-          <div class="chart-box h-mid"><canvas id="o-ch-size"></canvas></div>
-        </div>
       </section>
+      <p class="q" id="o-chartRowHint" style="margin:-8px 0 18px;display:none;">
+        라인업별·사이즈별 판매는 <b>왼쪽에서 브랜드를 선택</b>하면 나타납니다 (브랜드가 섞이면 비교가 의미 없어서 숨깁니다).
+      </p>
 
       <section class="section card chart-section">
         <h3><span id="o-topMetricLabel">판매수량</span> TOP 10 SKU</h3><p class="q">(현재 필터 기준)</p>
@@ -1661,7 +1678,9 @@ function calcDelta(cur, prev, comparable){
 function renderOrd(){
   renderFilterWarn('o', state.ordFilters, {model:'모델명', channel:'판매처', type:'출고유형', gender:'성별', size:'사이즈'},
                    ()=>{ clearOrdDrillSilent(); buildOrdFilters(); }, renderOrd);
-  renderOrdKPI(); renderOrdBrandCmp(); renderOrdTrend(); renderOrdCat(); renderOrdModel(); renderOrdChannel(); renderOrdType(); renderOrdSize(); renderOrdTop(); renderOrdTable();
+  // 카드 표시/숨김을 먼저 정해야 숨은 카드를 헛되이 그리지 않습니다
+  layoutOrdChartRow();
+  renderOrdKPI(); renderOrdBrandCmp(); renderOrdTrend(); renderOrdCat(); renderOrdModel(); renderOrdSize(); renderOrdChannel(); renderOrdType(); renderOrdTop(); renderOrdTable();
 }
 
 function ordValField(){ return state.ordMetric==='amount' ? 'amount' : 'qty'; }
@@ -1900,6 +1919,7 @@ function renderOrdCat(){
   renderBreakdownDoughnutOrBar('o-ch-cat','category',labels,g,PALETTE,v=>setOrdDrill('category',v),both);
 }
 function renderOrdModel(){
+  if(state.brand==='ALL') return;   // 전체 브랜드에서는 카드를 숨기므로 계산도 건너뜀
   const rows=ordFilteredRows();
   const both=groupBoth(rows,'model');
   const g=groupSum(rows,'model',ordValField());
@@ -1948,16 +1968,83 @@ function renderOrdType(){
   const labels=Object.keys(g).sort((a,b)=>g[b]-g[a]);
   renderBreakdownDoughnutOrBar('o-ch-type','type',labels,g,['#2C4BB8','#D98A1E','#D42F52','#1C8F8A'],v=>setOrdDrill('type',v),both);
 }
-/* [2026-08-24 추가] 사이즈별 판매.
-   다른 분해 차트는 값이 큰 순으로 정렬하지만, 사이즈는 **크기순**으로 둡니다.
-   "어느 구간이 잘 나가고 어디가 비는지"를 곡선처럼 읽어야 발주 사이즈를 정할 수 있어서,
-   큰 순으로 섞어놓으면 그 판단이 안 됩니다(235~280 신발 사이즈가 특히 그렇습니다). */
+/* [2026-08-24] 라인업 / 사이즈 카드는 브랜드를 골랐을 때만 보여줍니다.
+   브랜드가 섞인 상태(전체 브랜드)에서 라인업이나 사이즈를 한 차트에 넣으면,
+   신발 사이즈와 캠핑용품 규격이 같이 잡히는 식이라 비교 자체가 성립하지 않습니다.
+   ─ 카드 span은 여기서 다시 계산합니다. 6칸 그리드이므로
+     5개(브랜드 선택) → 2,2,2 + 3,3 = 3+2 배치 / 3개(전체) → 2,2,2 = 한 줄 3개. */
+function layoutOrdChartRow(){
+  const row=document.getElementById('o-chartRow');
+  if(!row) return;
+  const byBrand = state.brand!=='ALL';
+  const mCard=document.getElementById('o-card-model'), sCard=document.getElementById('o-card-size');
+  if(mCard) mCard.style.display = byBrand ? '' : 'none';
+  if(sCard) sCard.style.display = byBrand ? '' : 'none';
+  const hint=document.getElementById('o-chartRowHint');
+  if(hint) hint.style.display = byBrand ? 'none' : '';
+
+  const cards=[...row.children].filter(c=>c.classList.contains('card') && c.style.display!=='none');
+  const n=cards.length;
+  cards.forEach((c,i)=>{
+    let span=2;
+    if(n===5) span = i<3 ? 2 : 3;   // 위 3개 + 아래 2개
+    else if(n===4) span=3;
+    else if(n===2) span=3;
+    else if(n===1) span=6;
+    c.style.gridColumn='span '+span;
+  });
+}
+
+/* 사이즈별 판매 - 도넛.
+   ① 사이즈가 없는 품목은 뺍니다. 사이즈 값이 0이거나 비어 있는 캠핑용품이 섞이면
+      단가가 높아 그 조각 하나가 도넛을 거의 다 차지해 버려서, 정작 봐야 할
+      신발 사이즈 분포가 안 보입니다(실측: (미지정) 하나가 1,000만원대).
+      1m/3m/원형 같은 규격 표기도 같은 이유로 제외하고, 몇 건을 뺐는지 아래에 적어줍니다.
+   ② 조각 순서는 값 큰 순이 아니라 크기순입니다. 색도 작은 사이즈 → 큰 사이즈로
+      연한색 → 진한색이 되게 해서, 도넛을 시계방향으로 돌며 분포를 읽을 수 있게 했습니다.
+   ③ 숫자 사이즈가 하나도 없는 브랜드(캠핑용품 전용 등)면 제외하지 않고 전부 보여줍니다
+      - 안 그러면 빈 차트가 되기 때문입니다. */
+const SIZE_RAMP=['#DCE4F7','#C3D0F0','#A9BCE9','#8FA6E8','#7590DE','#5B7FD9','#4767CB','#2C4BB8','#24409E','#1E337A','#182861'];
+function isNumericSize(v){ const s=String(v).trim(); return /^\d+(\.\d+)?$/.test(s) && parseFloat(s)>0; }
+
 function renderOrdSize(){
+  if(state.brand==='ALL') return;   // 카드가 숨겨져 있으므로 계산도 건너뜀
   const rows=ordFilteredRows();
-  const both=groupBoth(rows,'size');
-  const g=groupSum(rows,'size',ordValField());
+  const vf=ordValField();
+
+  const sized = rows.filter(r=>isNumericSize(r.size));
+  const useAll = sized.length===0;            // 숫자 사이즈가 없는 브랜드 대비
+  const target = useAll ? rows : sized;
+  const excluded = useAll ? [] : rows.filter(r=>!isNumericSize(r.size));
+
+  const g=groupSum(target,'size',vf);
+  const both=groupBoth(target,'size');
   const labels=sortSizes(Object.keys(g));
-  renderBreakdownDoughnutOrBar('o-ch-size','size',labels,g,PALETTE,v=>setOrdDrill('size',v),both);
+  const colors=labels.map((_,i)=> labels.length<=1 ? SIZE_RAMP[7]
+                : SIZE_RAMP[Math.round(i/(labels.length-1)*(SIZE_RAMP.length-1))]);
+
+  document.getElementById('o-sizeDesc').textContent =
+    useAll ? '어느 사이즈가 잘 나가나? (크기순)' : '어느 사이즈가 잘 나가나? (신발 사이즈만, 크기순)';
+
+  const noteEl=document.getElementById('o-sizeNote');
+  if(excluded.length>0){
+    const exVal=excluded.reduce((a,r)=>a+(r[vf]||0),0);
+    noteEl.style.display='';
+    noteEl.textContent = `※ 사이즈가 없는 품목 ${fmtNum(excluded.length)}건`+
+      (vf==='amount' ? ` (${fmtNum(exVal)}원)` : ` (${fmtNum(exVal)}개)`)+`은 제외했습니다.`;
+  }else{
+    noteEl.style.display='none';
+  }
+
+  // 크기순·색상 램프를 유지해야 해서 공용 함수(값 큰 순 + 고정 팔레트)를 안 쓰고 직접 그립니다.
+  const total=labels.reduce((a,l)=>a+(g[l]||0),0);
+  mk('o-ch-size',{type:'doughnut',
+    data:{labels,datasets:[{data:labels.map(l=>g[l]),backgroundColor:colors,borderColor:'#FFFFFF',borderWidth:2,hoverOffset:6}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
+      onClick:(e,el)=>{if(el.length)setOrdDrill('size',labels[el[0].index]);},
+      plugins:{legend:{position:'bottom',labels:{boxWidth:10,boxHeight:10,padding:6,font:{size:10}}},
+        tooltip:{...tip,callbacks:{title:c=>c[0].label+' 사이즈',
+          label:c=>breakdownTooltipLabel(c, both, total)}}}}});
 }
 function renderOrdTop(){
   const rows=ordFilteredRows();
