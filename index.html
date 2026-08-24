@@ -174,6 +174,10 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .grid-2{display:grid;grid-template-columns:1.1fr 1.4fr;gap:14px;}
 .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
 .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}
+/* [2026-08-24] 주문분석 분해 차트가 4개 -> 5개(사이즈별 추가)가 되면서 필요해짐.
+   ※ 아래 반응형(@media 1100/680)과 인쇄(@media print)에도 .grid-5 규칙을 같이 넣어둘 것 -
+     인쇄에서 빠지면 A4 가로에서 1열로 무너집니다(.grid-4에서 이미 겪은 문제). */
+.grid-5{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;}
 
 .metric-toggle{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
 .metric-toggle-label{font-size:12px;font-weight:600;color:var(--text-tertiary);margin-right:2px;}
@@ -386,8 +390,8 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
 @keyframes spin{to{transform:rotate(360deg);}}
 #dash{flex:1;min-width:0;display:none;} #dash.on{display:block;}
 
-@media(max-width:1100px){.kpi-row{grid-template-columns:repeat(3,1fr);} .grid-2{grid-template-columns:1fr;} .grid-3{grid-template-columns:1fr;} .grid-4{grid-template-columns:repeat(2,1fr);}}
-@media(max-width:680px){.grid-4{grid-template-columns:1fr;}}
+@media(max-width:1100px){.kpi-row{grid-template-columns:repeat(3,1fr);} .grid-2{grid-template-columns:1fr;} .grid-3{grid-template-columns:1fr;} .grid-4{grid-template-columns:repeat(2,1fr);} .grid-5{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:680px){.grid-4{grid-template-columns:1fr;} .grid-5{grid-template-columns:1fr;}}
 @media(max-width:680px){.kpi-row{grid-template-columns:repeat(2,1fr);} .title h1{font-size:17px;}}
 
 /* [2026-08-04 추가] 인쇄 여백 축소. 기본 여백(브라우저 기본값 약 12~20mm)이 넓어서
@@ -439,6 +443,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
   .grid-2{grid-template-columns:1.1fr 1.4fr !important;}
   .grid-3{grid-template-columns:repeat(3,1fr) !important;}
   .grid-4{grid-template-columns:repeat(4,1fr) !important;}
+  .grid-5{grid-template-columns:repeat(5,1fr) !important;}
   .btn-file,.btn-logout,#fileInput,.live,.tabs,.reset,.search .ic{display:none !important;}
   .period{border:1px solid #888 !important; color:#111 !important;}
   .kpi,.filters,div.card{border:1.2px solid #555 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; break-inside:avoid;}
@@ -682,7 +687,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
         <div class="chart-box" style="height:210px;"><canvas id="o-ch-trend"></canvas></div>
       </section>
 
-      <section class="section grid-4">
+      <section class="section grid-5">
         <div class="card">
           <h3>카테고리별 판매</h3><p class="q">어느 카테고리가 많이 나가나?</p>
           <div class="chart-box h-mid"><canvas id="o-ch-cat"></canvas></div>
@@ -698,6 +703,10 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
         <div class="card">
           <h3>출고유형별 판매</h3><p class="q">일반판매 vs 체험단 vs 유투버</p>
           <div class="chart-box h-mid"><canvas id="o-ch-type"></canvas></div>
+        </div>
+        <div class="card">
+          <h3>사이즈별 판매</h3><p class="q">어느 사이즈가 잘 나가나? (크기순)</p>
+          <div class="chart-box h-mid"><canvas id="o-ch-size"></canvas></div>
         </div>
       </section>
 
@@ -1652,7 +1661,7 @@ function calcDelta(cur, prev, comparable){
 function renderOrd(){
   renderFilterWarn('o', state.ordFilters, {model:'모델명', channel:'판매처', type:'출고유형', gender:'성별', size:'사이즈'},
                    ()=>{ clearOrdDrillSilent(); buildOrdFilters(); }, renderOrd);
-  renderOrdKPI(); renderOrdBrandCmp(); renderOrdTrend(); renderOrdCat(); renderOrdModel(); renderOrdChannel(); renderOrdType(); renderOrdTop(); renderOrdTable();
+  renderOrdKPI(); renderOrdBrandCmp(); renderOrdTrend(); renderOrdCat(); renderOrdModel(); renderOrdChannel(); renderOrdType(); renderOrdSize(); renderOrdTop(); renderOrdTable();
 }
 
 function ordValField(){ return state.ordMetric==='amount' ? 'amount' : 'qty'; }
@@ -1939,6 +1948,17 @@ function renderOrdType(){
   const labels=Object.keys(g).sort((a,b)=>g[b]-g[a]);
   renderBreakdownDoughnutOrBar('o-ch-type','type',labels,g,['#2C4BB8','#D98A1E','#D42F52','#1C8F8A'],v=>setOrdDrill('type',v),both);
 }
+/* [2026-08-24 추가] 사이즈별 판매.
+   다른 분해 차트는 값이 큰 순으로 정렬하지만, 사이즈는 **크기순**으로 둡니다.
+   "어느 구간이 잘 나가고 어디가 비는지"를 곡선처럼 읽어야 발주 사이즈를 정할 수 있어서,
+   큰 순으로 섞어놓으면 그 판단이 안 됩니다(235~280 신발 사이즈가 특히 그렇습니다). */
+function renderOrdSize(){
+  const rows=ordFilteredRows();
+  const both=groupBoth(rows,'size');
+  const g=groupSum(rows,'size',ordValField());
+  const labels=sortSizes(Object.keys(g));
+  renderBreakdownDoughnutOrBar('o-ch-size','size',labels,g,PALETTE,v=>setOrdDrill('size',v),both);
+}
 function renderOrdTop(){
   const rows=ordFilteredRows();
   const g=groupSum(rows,'code',ordValField());
@@ -2000,7 +2020,7 @@ function renderTopSkuTip(ctx, gQty, gAmt){
   el.style.top = top + 'px';
 }
 
-const ODRILL_LABEL={category:'카테고리',channel:'판매처',type:'출고유형',code:'상품코드',dateStr:'날짜',model:'라인업'};
+const ODRILL_LABEL={category:'카테고리',channel:'판매처',type:'출고유형',code:'상품코드',dateStr:'날짜',model:'라인업',size:'사이즈'};
 function setOrdDrill(field,value){
   const idx=state.ordDrills.findIndex(d=>d.field===field);
   if(idx>=0) state.ordDrills[idx].value=value; else state.ordDrills.push({field,value});
