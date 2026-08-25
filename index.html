@@ -502,7 +502,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
   tbody td{color:#111 !important; border-bottom:1px solid #999 !important; background:#fff !important;}
   tbody tr.need td{background:#ffe7ec !important;}
   .tbl-scroll{max-height:none !important; overflow:visible !important; border:1.2px solid #555 !important;}
-  .img-trigger,.row-count,.drill .x,#o-drillChips .rm{display:none !important;}
+  .img-trigger,.row-count,.drill .x,#o-activeChips .rm{display:none !important;}
   /* [2026-08-04 추가] 프로모션 일정 탭의 플로팅 공유 메모창은 인쇄에서 제외.
      화면에 떠 있는 입력 도구라 인쇄물에 들어갈 이유가 없고, position:fixed 요소는
      브라우저에 따라 페이지마다 반복 인쇄되거나 본문을 가리는 문제도 있음. */
@@ -783,11 +783,6 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
       </section>
 
       <section class="section card">
-        <div class="drill" id="o-drill">
-          <span style="color:var(--text-tertiary)">드릴다운:</span>
-          <span id="o-drillChips" style="display:flex;gap:8px;flex-wrap:wrap;"></span>
-          <span class="x" id="o-drillClearAll" title="전체 해제">×</span>
-        </div>
         <div class="table-head">
           <h3>상세 주문 내역</h3>
           <div class="search"><span class="ic">🔍</span><input type="text" id="o-searchBox" placeholder="여러 단어 검색 가능 (예: BJM931 일반 / BJM931,일반) — 모두 만족하는 행만 표시" /></div>
@@ -800,7 +795,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
       </section>
 
       <section class="section ai-box">
-        <h3>AI에게 물어보기</h3><p class="q">지금 필터/검색/드릴다운된 주문상세 목록(최대 60건)만 보고 답합니다. 예: "이 기간 매출 특이사항 요약해줘"</p>
+        <h3>AI에게 물어보기</h3><p class="q">지금 필터/검색이 적용된 주문상세 목록(최대 60건)만 보고 답합니다. 예: "이 기간 매출 특이사항 요약해줘"</p>
         <div class="ai-row">
           <input type="text" class="ai-input" id="o-aiInput" placeholder="예: 이 판매처 중에 체험단 비중이 제일 높은 건 어디야?" />
           <button class="ai-askBtn" id="o-aiAskBtn">물어보기</button>
@@ -1683,7 +1678,21 @@ function ordRowsInRange(pFrom,pTo){
     (f.brand==='ALL'||r.brand===f.brand) &&
     (f.category==='ALL'||r.category===f.category) && msMatch(f.model,r.model) &&
     msMatch(f.channel,r.channel) && msMatch(f.type,r.type) &&
-    msMatch(f.size,r.size) && msMatch(f.gender,r.gender));
+    msMatch(f.size,r.size) && msMatch(f.gender,r.gender) &&
+    ordSearchMatch(r));
+}
+
+/* [2026-08-25] 검색어를 KPI·차트까지 걸리게 바꿨습니다.
+   예전에는 맨 아래 표에서만 걸러져서, "지금 조건"에 검색어가 떠 있는데 위 차트는
+   전부 그대로 나오는 게 이상해 보였습니다(사용자 지적). 이제 한 곳에서 함께 걸립니다.
+   ※ 상품코드·모델명·판매처·카테고리·브랜드·날짜·출고유형·성별을 훑는 부분일치이고,
+     공백/쉼표로 여러 단어를 넣으면 AND 조건입니다(사이즈는 검색 대상이 아님 - 사이즈 필터를 쓰세요). */
+function ordSearchMatch(r){
+  const q=(state.ordSearch||'').trim().toLowerCase();
+  if(!q) return true;
+  const tokens=q.split(/[,\s]+/).filter(t=>t);
+  const fields=[r.code,r.model,r.channel,r.category,r.brand,r.dateStr,r.type,r.gender].map(v=>String(v).toLowerCase());
+  return tokens.every(t=>fields.some(f=>f.includes(t)));
 }
 function ordFilteredRows(){
   const [pFrom,pTo]=computeOrdPeriodRange();
@@ -2169,7 +2178,7 @@ function renderOrdTop(){
   // 하나의 요소(#chartTip)에 담음 - 요소가 하나뿐이라 구조적으로 겹칠 수가 없음.
   mk('o-ch-top',{type:'bar',data:{labels,datasets:[{label:ordMetricLabel(),data:labels.map(l=>g[l]),backgroundColor:'#2C4BB8',borderRadius:4}]},
     options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
-      onClick:(e,el)=>{if(el.length)setOrdDrill('code',labels[el[0].index]);},
+      onClick:(e,el)=>{if(el.length)applyOrdSearch(labels[el[0].index]);},
       plugins:{legend:{display:false},
         tooltip:{ enabled:false, external: ctx=>renderTopSkuTip(ctx, gQty, gAmt) }},
       scales:{x:{grid:{color:GRID}},y:{grid:{display:false},ticks:{font:{size:10}}}}}});
@@ -2218,7 +2227,6 @@ function renderTopSkuTip(ctx, gQty, gAmt){
   el.style.top = top + 'px';
 }
 
-const ODRILL_LABEL={category:'카테고리',channel:'판매처',type:'출고유형',code:'상품코드',dateStr:'날짜',model:'라인업',size:'사이즈'};
 /* ════════════════════════════════════════════════════════
    [2026-08-24] 그래프를 눌러서 바로 필터 걸기
    ────────────────────────────────────────────────────────
@@ -2229,6 +2237,17 @@ const ODRILL_LABEL={category:'카테고리',channel:'판매처',type:'출고유�
    같은 막대를 다시 누르면 해제됩니다(토글).
 ════════════════════════════════════════════════════════ */
 const OFILTER_LABEL={category:'카테고리',model:'라인업',channel:'판매처',type:'출고유형',size:'사이즈',gender:'성별'};
+
+// TOP 10 SKU 막대 클릭 → 검색창에 그 상품코드. 같은 걸 다시 누르면 지웁니다.
+// (상품코드는 대응하는 필터가 없어서 검색으로 거는 게 유일한 방법입니다)
+function applyOrdSearch(code){
+  const box=document.getElementById('o-searchBox');
+  const cur=(state.ordSearch||'').trim();
+  state.ordSearch = (cur===String(code)) ? '' : String(code);
+  if(box) box.value=state.ordSearch;
+  state.openMsel=null;
+  buildOrdFilters(); renderOrd();
+}
 
 function applyOrdChartFilter(field, value){
   const f=state.ordFilters;
@@ -2297,41 +2316,18 @@ document.getElementById('o-activeClearAll').addEventListener('click',()=>{
   clearOrdDrillSilent(); buildOrdFilters(); renderOrd();
 });
 
-function setOrdDrill(field,value){
-  const idx=state.ordDrills.findIndex(d=>d.field===field);
-  if(idx>=0) state.ordDrills[idx].value=value; else state.ordDrills.push({field,value});
-  renderOrdDrillUI();
-  renderOrdTable();
-  document.getElementById('o-table').scrollIntoView({behavior:'smooth',block:'center'});
-}
-function removeOrdDrill(field){ state.ordDrills=state.ordDrills.filter(d=>d.field!==field); renderOrdDrillUI(); renderOrdTable(); }
-function clearOrdDrill(){ state.ordDrills=[]; renderOrdDrillUI(); renderOrdTable(); }
-function renderOrdDrillUI(){
-  const has=state.ordDrills.length>0;
-  document.getElementById('o-drill').classList.toggle('on',has);
-  document.getElementById('o-drillChips').innerHTML = state.ordDrills.map(d=>
-    `<span class="drill-chip" data-field="${d.field}">${ODRILL_LABEL[d.field]||d.field} = ${escAttr(d.value)}<span class="rm" data-field="${d.field}">×</span></span>`).join('');
-}
-document.getElementById('o-drillChips').addEventListener('click',e=>{
-  const rm=e.target.closest('.rm'); if(rm) removeOrdDrill(rm.dataset.field);
-});
-document.getElementById('o-drillClearAll').addEventListener('click',clearOrdDrill);
+/* [2026-08-25] 드릴다운(표만 걸러지던 별도 장치)은 없앴습니다.
+   막대 클릭이 전부 진짜 필터로 바뀌고 검색어도 전체에 걸리게 되면서, 조건 표시가
+   "지금 조건" 칩 한 곳으로 모였습니다. 두 군데로 나뉘어 있으면 헷갈리기만 합니다.
+   clearOrdDrillSilent는 호출부가 많아 이름만 남겨두고 아무것도 안 하게 둡니다. */
 
 const OTCOLS=[
   {k:'date',t:'날짜'},{k:'code',t:'상품코드'},{k:'brand',t:'브랜드'},{k:'category',t:'카테고리'},{k:'model',t:'모델명'},
   {k:'channel',t:'판매처'},{k:'type',t:'출고유형'},{k:'size',t:'사이즈',num:1},{k:'gender',t:'성별'},{k:'qty',t:'수량',num:1},
 ];
 function ordTableRows(){
+  // 검색어는 이제 ordFilteredRows() 단계에서 이미 걸렸으므로 여기서는 정렬만 합니다
   let rows=ordFilteredRows();
-  if(state.ordDrills.length) rows=rows.filter(r=>state.ordDrills.every(d=>r[d.field]===d.value));
-  const q=state.ordSearch.trim().toLowerCase();
-  if(q){
-    const tokens=q.split(/[,\s]+/).filter(t=>t);
-    rows=rows.filter(r=>{
-      const fields=[r.code,r.model,r.channel,r.category,r.brand,r.dateStr,r.type,r.gender].map(v=>String(v).toLowerCase());
-      return tokens.every(t=>fields.some(f=>f.includes(t)));
-    });
-  }
   const {col,dir}=state.ordSort;
   rows=rows.slice().sort((a,b)=>{let x=a[col],y=b[col];
     if(col==='date'){x=x?x.getTime():0;y=y?y.getTime():0;}
@@ -2358,7 +2354,7 @@ function renderOrdTable(){
 ['brand','category'].forEach(k=>{
   document.getElementById('o-'+k).addEventListener('change',e=>{state.ordFilters[k]=e.target.value;clearOrdDrillSilent();buildOrdFilters();renderOrd();});
 });
-function clearOrdDrillSilent(){state.ordDrills=[];document.getElementById('o-drill').classList.remove('on');document.getElementById('o-drillChips').innerHTML='';}
+function clearOrdDrillSilent(){ /* 드릴다운 제거됨 - 호출부 호환용 빈 함수 */ }
 function renderPeriodButtons(){
   document.querySelectorAll('#o-periodQuick .period-btn').forEach(btn=>{
     btn.classList.toggle('active', btn.dataset.p===state.ordPeriod.preset);
@@ -2392,7 +2388,16 @@ document.getElementById('o-resetBtn').addEventListener('click',()=>{
   document.getElementById('o-favSelect').value='';
   state.openMsel=null;
   buildOrdFilters(); clearOrdDrillSilent(); renderOrd();});
-document.getElementById('o-searchBox').addEventListener('input',e=>{state.ordSearch=e.target.value;renderOrdActiveChips();renderOrdTable();});
+/* [2026-08-25] 검색어가 이제 차트·KPI까지 다시 그리므로, 글자 하나 칠 때마다 전부
+   계산하면 버벅입니다. 타이핑이 멈추고 250ms 뒤에 한 번만 그립니다.
+   칩은 바로 갱신해서 입력한 게 즉시 보이게 합니다. */
+let ordSearchTimer=null;
+document.getElementById('o-searchBox').addEventListener('input',e=>{
+  state.ordSearch=e.target.value;
+  renderOrdActiveChips();
+  clearTimeout(ordSearchTimer);
+  ordSearchTimer=setTimeout(()=>{ buildOrdFilters(); renderOrd(); }, 250);
+});
 setupFavControls('o',
   ()=>({filters:{...state.ordFilters}, search:state.ordSearch, period:{...state.ordPeriod}}),
   (saved)=>{
@@ -2422,7 +2427,7 @@ document.getElementById('o-exportBtn').addEventListener('click',()=>{
 });
 
 document.getElementById('o-aiAskBtn').addEventListener('click', ()=>{
-  const allRows = ordTableRows();   // 필터/드릴다운이 적용된 "전체" 행 (60건 제한 없음)
+  const allRows = ordTableRows();   // 필터/검색이 적용된 "전체" 행 (60건 제한 없음)
   const rows = allRows.slice(0,60).map(r=>({
     날짜:r.dateStr, 상품코드:r.code, 브랜드:r.brand, 카테고리:r.category, 모델명:r.model,
     판매처:r.channel, 출고유형:r.type, 사이즈:r.size, 성별:r.gender, 수량:r.qty, 매출금액:r.amount
