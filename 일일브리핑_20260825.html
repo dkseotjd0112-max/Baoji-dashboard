@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>바오지/아이두젠 일일 판매·재고 브리핑 (2026-08-25)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  body{font-family:"Malgun Gothic","Apple SD Gothic Neo",sans-serif;background:#f5f6f8;color:#222;margin:0;padding:24px;}
+  h1{font-size:20px;margin-bottom:4px;}
+  .sub{color:#666;font-size:13px;margin-bottom:20px;}
+  .card{background:#fff;border-radius:10px;padding:16px 20px;margin-bottom:18px;box-shadow:0 1px 3px rgba(0,0,0,.08);}
+  .card h2{font-size:15px;margin:0 0 10px;border-left:4px solid #2563eb;padding-left:8px;}
+  table{border-collapse:collapse;width:100%;font-size:13px;}
+  th,td{border:1px solid #e2e2e2;padding:6px 8px;text-align:center;}
+  th{background:#eef2ff;}
+  .num{text-align:right;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+  .badge{display:inline-block;background:#fee2e2;color:#b91c1c;border-radius:6px;padding:2px 8px;font-size:12px;margin-left:6px;}
+  .badge-ok{background:#dcfce7;color:#15803d;}
+  canvas{max-height:280px;}
+  .note{color:#888;font-size:12px;margin-top:6px;}
+</style>
+</head>
+<body>
+<h1>바오지 · 아이두젠 일일 판매·재고 브리핑</h1>
+<div class="sub">기준일: 2026-08-25 (실행) / 매출 실적 기준일: 2026-08-24(월)</div>
+
+<div class="card">
+<h2>① 발주 필요 <span class="badge">19건</span></h2>
+<table>
+<tr><th>상품코드</th><th>상품명</th><th class="num">부족수량</th></tr>
+<tr><td>BJM898-GNBK270</td><td>BJM898GNBK 바오지 남성 기능화 그린블랙 270</td><td class="num">18</td></tr>
+<tr><td>ECW304-WHLB240</td><td>ECW304WHLB 바오지 여성 러닝화 화이트연블루 240</td><td class="num">11</td></tr>
+<tr><td>BJW1090-PK240</td><td>BJW1090PK 바오지 여성 데일리화 핑크 240</td><td class="num">6</td></tr>
+<tr><td>ECW304-WHLB250</td><td>ECW304WHLB 바오지 여성 러닝화 화이트연블루 250</td><td class="num">6</td></tr>
+<tr><td>BJW1090-PK235</td><td>BJW1090PK 바오지 여성 데일리화 핑크 235</td><td class="num">6</td></tr>
+</table>
+</div>
+
+<div class="card">
+<h2>② 소진임박 경고 <span class="badge">8건</span></h2>
+<table>
+<tr><th>상품코드</th><th>상품명</th><th class="num">현재고</th><th class="num">최근7일판매</th><th class="num">잔여일수</th></tr>
+<tr><td>DPM644-BK280</td><td>DPM644BK 바오지 남성 러닝화 블랙 280</td><td class="num">0</td><td class="num">0</td><td class="num">이미 품절</td></tr>
+<tr><td>BJW1090-PK235</td><td>BJW1090PK 바오지 여성 데일리화 핑크 235</td><td class="num">0</td><td class="num">0</td><td class="num">이미 품절</td></tr>
+<tr><td>ECW304-WHLB235</td><td>ECW304WHLB 바오지 여성 러닝화 화이트연블루 235</td><td class="num">0</td><td class="num">0</td><td class="num">이미 품절</td></tr>
+<tr><td>DPW770-AP235</td><td>DPW770AP 바오지 여성 러닝화 살구색 235</td><td class="num">0</td><td class="num">0</td><td class="num">이미 품절</td></tr>
+<tr><td>BJM898-GNBK270</td><td>BJM898GNBK 바오지 남성 기능화 그린블랙 270</td><td class="num">10</td><td class="num">16</td><td class="num">4.4일</td></tr>
+</table>
+</div>
+
+<div class="card">
+<h2>③ 판매 동향 (최근 7일: 08/18~08/24)</h2>
+<div class="grid2">
+<div>
+<canvas id="trendChart"></canvas>
+<div class="note">최근7일 265개 vs 이전7일(08/11~08/17) 165개 (+60.6%)</div>
+</div>
+<div>
+<canvas id="channelChart"></canvas>
+<div class="note">판매처별 최근7일 판매수량 상위 2곳</div>
+</div>
+</div>
+<table style="margin-top:14px;">
+<tr><th>순위</th><th>모델명</th><th>카테고리</th><th class="num">최근7일 판매수량(체험단 제외)</th></tr>
+<tr><td>1</td><td>BJM946</td><td>라이프스타일(데일리)</td><td class="num">50</td></tr>
+<tr><td>2</td><td>BJM898</td><td>아웃도어(기능성)</td><td class="num">41</td></tr>
+<tr><td>3</td><td>X-20FA</td><td>스포츠선글라스</td><td class="num">21</td></tr>
+</table>
+</div>
+
+<div class="card">
+<h2>④ 재고과다 주의 <span class="badge badge-ok">해당 없음</span></h2>
+<div class="note">현재고&gt;안전재고×2, 안전재고&gt;0, 최근7일판매=0, 2개월판매 3개 이하 조건 기준 해당 품목 없음.</div>
+</div>
+
+<div class="card">
+<h2>⑤ 전일(2026-08-24, 월) 매출 실적</h2>
+<div class="note">전일(08-23, 일요일) 판매 0건으로 증감률 산출 불가. 매칭 제외 0건.</div>
+<div class="grid2">
+<div>
+<canvas id="brandChart"></canvas>
+<table style="margin-top:10px;">
+<tr><th>브랜드</th><th class="num">수량</th><th class="num">매출액</th></tr>
+<tr><td>바오지</td><td class="num">25</td><td class="num">1,122,500</td></tr>
+<tr><td>아이두젠</td><td class="num">14</td><td class="num">534,100</td></tr>
+<tr><td><b>합계</b></td><td class="num"><b>39</b></td><td class="num"><b>1,656,600</b></td></tr>
+</table>
+</div>
+<div>
+<canvas id="catChart"></canvas>
+<table style="margin-top:10px;">
+<tr><th>카테고리</th><th class="num">수량</th><th class="num">매출액</th></tr>
+<tr><td>퍼포먼스(러닝)</td><td class="num">13</td><td class="num">583,700</td></tr>
+<tr><td>스포츠선글라스</td><td class="num">14</td><td class="num">534,100</td></tr>
+<tr><td>라이프스타일(데일리)</td><td class="num">11</td><td class="num">493,900</td></tr>
+<tr><td>아웃도어(기능성)</td><td class="num">1</td><td class="num">44,900</td></tr>
+</table>
+</div>
+</div>
+</div>
+
+<script>
+new Chart(document.getElementById('trendChart'), {
+  type:'bar',
+  data:{labels:['이전7일(08/11-17)','최근7일(08/18-24)'],
+    datasets:[{label:'판매수량',data:[165,265],backgroundColor:['#93c5fd','#2563eb']}]},
+  options:{plugins:{legend:{display:false},title:{display:true,text:'최근7일 vs 이전7일 판매수량'}}}
+});
+new Chart(document.getElementById('channelChart'), {
+  type:'bar',
+  data:{labels:['쿠팡그로스','카페24/바오지'],
+    datasets:[{label:'판매수량',data:[84,76],backgroundColor:['#f59e0b','#fbbf24']}]},
+  options:{indexAxis:'y',plugins:{legend:{display:false},title:{display:true,text:'판매처별 최근7일 판매수량 Top2'}}}
+});
+new Chart(document.getElementById('brandChart'), {
+  type:'doughnut',
+  data:{labels:['바오지','아이두젠'],datasets:[{data:[1122500,534100],backgroundColor:['#2563eb','#f97316']}]},
+  options:{plugins:{title:{display:true,text:'브랜드별 매출액(원)'}}}
+});
+new Chart(document.getElementById('catChart'), {
+  type:'bar',
+  data:{labels:['퍼포먼스(러닝)','스포츠선글라스','라이프스타일(데일리)','아웃도어(기능성)'],
+    datasets:[{label:'매출액',data:[583700,534100,493900,44900],backgroundColor:'#16a34a'}]},
+  options:{plugins:{legend:{display:false},title:{display:true,text:'카테고리별 매출액(원)'}}}
+});
+</script>
+</body>
+</html>
