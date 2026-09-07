@@ -1,0 +1,261 @@
+<title>바오지 일일 판매·재고 브리핑 — 2026-09-04</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: 'Malgun Gothic','Apple SD Gothic Neo',sans-serif; background:#f4f5f7; color:#1f2430; margin:0; padding:24px; }
+  h1 { font-size:22px; margin:0 0 4px 0; }
+  .subtitle { color:#5a6272; font-size:13px; margin-bottom:16px; }
+  .kpi-strip { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px; }
+  .kpi-strip.small { grid-template-columns:repeat(3,1fr); margin:12px 0; }
+  .kpi-tile { background:#fff; border:1px solid #e2e5ea; border-radius:10px; padding:14px 16px; }
+  .kpi-label { font-size:12px; color:#6b7280; margin-bottom:6px; }
+  .kpi-value { font-size:20px; font-weight:700; }
+  .card { background:#fff; border:1px solid #e2e5ea; border-radius:12px; padding:20px 22px; margin-bottom:18px; page-break-inside:avoid; }
+  .card h2 { font-size:17px; margin:0 0 10px 0; border-left:4px solid #2563eb; padding-left:10px; }
+  .note { font-size:13px; color:#374151; background:#f8f9fb; border-radius:8px; padding:10px 12px; margin:8px 0 14px 0; }
+  .note.warn { background:#fff7ed; color:#9a5b00; }
+  .warnbox { font-size:13px; color:#9a1a1a; background:#fdecec; border:1px solid #f5b5b5; border-radius:8px; padding:10px 12px; margin:8px 0 14px 0; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  .chart-box { background:#fbfbfc; border:1px solid #edf0f3; border-radius:8px; padding:12px; }
+  .chart-box canvas { max-height:260px; }
+  .chart-box.full, .table-box.full { grid-column:1 / -1; }
+  .caption { font-size:12px; color:#6b7280; margin-top:8px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { border-bottom:1px solid #edf0f3; padding:6px 8px; text-align:left; }
+  th { background:#f4f6f9; font-weight:600; }
+  td.num { text-align:right; font-variant-numeric:tabular-nums; }
+  td.num.neg { color:#b91c1c; font-weight:600; }
+  .chg { font-weight:700; }
+  .chg.up { color:#16a34a; }
+  .chg.down { color:#dc2626; }
+  .chg.neutral { color:#6b7280; }
+  .chg.new { color:#2563eb; }
+  .tag { font-size:11px; background:#e5e7eb; border-radius:4px; padding:2px 6px; }
+  .tag.fallback { background:#fde68a; color:#78350f; }
+  footer { text-align:center; font-size:11px; color:#9aa0ab; margin-top:20px; }
+  @media print {
+    body { background:#fff; padding:8px; }
+    .card { border:1px solid #ccc; box-shadow:none; }
+  }
+  @page { size:A4; margin:14mm; }
+</style>
+<h1>바오지 일일 판매·재고 브리핑</h1>
+<div class="subtitle">기준일 2026-09-04 (비교일 2026-09-03) · 브랜드: 바오지 / 아이두젠 / 볼트겔</div>
+
+<div class="kpi-strip">
+  <div class="kpi-tile">
+    <div class="kpi-label">발주필요 건수</div>
+    <div class="kpi-value">18건</div>
+  </div>
+  <div class="kpi-tile">
+    <div class="kpi-label">소진임박 건수</div>
+    <div class="kpi-value">7건</div>
+  </div>
+  <div class="kpi-tile">
+    <div class="kpi-label">기준일(2026-09-04) 매출액</div>
+    <div class="kpi-value">590,600원</div>
+  </div>
+  <div class="kpi-tile">
+    <div class="kpi-label">전일 대비 증감률</div>
+    <div class="kpi-value"><span class="chg down">-80.1%</span></div>
+  </div>
+</div>
+
+
+<section class="card">
+  <h2>① 발주 필요</h2>
+  <p class="note">발주필요 SKU: <b>18건</b>. 안전재고가 전 SKU 0으로 설정되어 있어, 판정 기준은 2개월판매량으로 대체했습니다.
+  단, 2개월판매에는 체험단·샘플발송·CS출고 수량이 포함되어 있어 실제 필요 발주량보다 <b>과다 산정된 수치</b>입니다. 참고용으로만 활용하세요.</p>
+  <div class="grid2">
+    <div class="chart-box">
+      <canvas id="chart1"></canvas>
+      <div class="caption">모델명별 부족수량 합계 (상위 8개) — 어느 모델이 가장 급한가?</div>
+    </div>
+    <div class="table-box">
+      <table>
+        <thead><tr><th>상품코드</th><th>상품명</th><th>브랜드</th><th>현재고</th><th>부족수량</th></tr></thead>
+        <tbody><tr><td>BJM898-GNBK270</td><td>BJM898GNBK 바오지 남성 기능화 그린블랙 270</td><td>바오지</td><td class='num'>10</td><td class='num neg'>18</td></tr><tr><td>BJW1090-WH235</td><td>BJW1090WH 바오지 여성 데일리화 화이트 235</td><td>바오지</td><td class='num'>6</td><td class='num neg'>15</td></tr><tr><td>ECW304-WHPK235</td><td>ECW304WHPK 바오지 여성 러닝화 화이트핑크 235</td><td>바오지</td><td class='num'>12</td><td class='num neg'>8</td></tr><tr><td>BJW1090-WH240</td><td>BJW1090WH 바오지 여성 데일리화 화이트 240</td><td>바오지</td><td class='num'>16</td><td class='num neg'>8</td></tr><tr><td>BJW1090-WH255</td><td>BJW1090WH 바오지 여성 데일리화 화이트 255</td><td>바오지</td><td class='num'>1</td><td class='num neg'>7</td></tr></tbody>
+      </table>
+      <div class="caption">부족수량 상위 5개 SKU</div>
+    </div>
+  </div>
+</section>
+
+
+<section class="card">
+  <h2>② 소진임박 경고</h2>
+  <p class="note">소진 예상 7일 이내 SKU: <b>7건</b> (최근7일판매가 0이면 2개월판매/60으로 대체 산정).
+  최근 7일 판매 기준으로 계산된 항목은 프로모션 직후 판매량이 튄 경우 소진일수가 과소평가될 수 있으니 주의하세요.</p>
+  <div class="grid2">
+    <div class="chart-box">
+      <canvas id="chart2brand"></canvas>
+      <div class="caption">브랜드별 소진임박 SKU 개수 — 어느 브랜드가 가장 위험한가?</div>
+    </div>
+    <div class="chart-box">
+      <canvas id="chart2model"></canvas>
+      <div class="caption">모델명별 소진임박 SKU 개수 (상위 8개)</div>
+    </div>
+  </div>
+  <div class="table-box full">
+    <table>
+      <thead><tr><th>상품코드</th><th>상품명</th><th>현재고</th><th>일평균판매</th><th>소진일수</th><th>산정기준</th></tr></thead>
+      <tbody><tr><td>DPM644-BK280</td><td>DPM644BK 바오지 남성 러닝화 블랙 280</td><td class='num'>0</td><td class='num'>0.02</td><td class='num neg'>0.0일</td><td><span class="tag fallback">60일대체</span></td></tr><tr><td>BJW1090-WH255</td><td>BJW1090WH 바오지 여성 데일리화 화이트 255</td><td class='num'>1</td><td class='num'>0.29</td><td class='num neg'>3.5일</td><td><span class="tag">7일기준</span></td></tr><tr><td>DPW770-PK235</td><td>DPW770PK 바오지 여성 러닝화 핑크 235</td><td class='num'>1</td><td class='num'>0.29</td><td class='num neg'>3.5일</td><td><span class="tag">7일기준</span></td></tr><tr><td>BJW1133-WHGY240</td><td>BJW1133WHGY 바오지 여성 배드민턴화 화이트그레이 240</td><td class='num'>1</td><td class='num'>0.29</td><td class='num neg'>3.5일</td><td><span class="tag">7일기준</span></td></tr><tr><td>BJW1090-WH235</td><td>BJW1090WH 바오지 여성 데일리화 화이트 235</td><td class='num'>6</td><td class='num'>1.57</td><td class='num neg'>3.8일</td><td><span class="tag">7일기준</span></td></tr></tbody>
+    </table>
+    <div class="caption">가장 급한 5개 SKU (소진일수 오름차순)</div>
+  </div>
+</section>
+
+
+<section class="card">
+  <h2>③ 판매 동향 (최근 7일)</h2>
+  <p class="note">비교 대상은 달력상 7일이 아닌 <b>판매 데이터가 존재하는 날짜 기준</b>입니다.
+  최근 판매일 구간: 2026-08-27 ~ 2026-09-04 / 이전 판매일 구간: 2026-08-18 ~ 2026-08-26.
+  8/20에 하루 104개가 몰려 이전 구간 합계를 끌어올렸고, 그 여파로 최근 구간 대비 바오지 매출이 낮아 보이는 착시가 있습니다.</p>
+  <div class="chart-box full">
+    <canvas id="chart3a"></canvas>
+    <div class="caption">최근 14개 판매일 일별 수량 (좌: 이전 구간, 우: 최근 구간) — 최근 판매 흐름이 이전보다 나은가?</div>
+  </div>
+  <div class="grid2">
+    <div class="chart-box">
+      <canvas id="chart3b"></canvas>
+      <div class="caption">브랜드별 판매수량 비교 (최근 구간 vs 이전 구간)</div>
+    </div>
+    <div class="table-box">
+      <table>
+        <thead><tr><th>모델명</th><th>최근수량</th><th>이전수량</th><th>증감</th></tr></thead>
+        <tbody><tr><td>-</td><td class='num'>46</td><td class='num'>7</td><td><span class="chg up">+557.1%</span></td></tr><tr><td>BJW1090</td><td class='num'>40</td><td class='num'>23</td><td><span class="chg up">+73.9%</span></td></tr><tr><td>BJW1179</td><td class='num'>20</td><td class='num'>23</td><td><span class="chg down">-13.0%</span></td></tr><tr><td>ECW304</td><td class='num'>19</td><td class='num'>25</td><td><span class="chg down">-24.0%</span></td></tr><tr><td>S-10HA</td><td class='num'>17</td><td class='num'>4</td><td><span class="chg up">+325.0%</span></td></tr></tbody>
+      </table>
+      <div class="caption">최근 구간 판매수량 상위 5개 모델명 (일반판매만)</div>
+    </div>
+  </div>
+  <div class="table-box full">
+    <table>
+      <thead><tr><th>판매처</th><th>수량</th><th>비중</th><th>증감</th></tr></thead>
+      <tbody><tr><td>쿠팡로켓</td><td class='num'>85</td><td class='num'>38.5%</td><td><span class="chg up">+117.9%</span></td></tr><tr><td>자사몰</td><td class='num'>83</td><td class='num'>37.6%</td><td><span class="chg down">-17.8%</span></td></tr><tr><td>스토어팜</td><td class='num'>31</td><td class='num'>14.0%</td><td><span class="chg down">-20.5%</span></td></tr><tr><td>아이두젠몰</td><td class='num'>15</td><td class='num'>6.8%</td><td><span class="chg up">+400.0%</span></td></tr><tr><td>알리</td><td class='num'>2</td><td class='num'>0.9%</td><td><span class="chg down">-50.0%</span></td></tr><tr><td>11번가</td><td class='num'>1</td><td class='num'>0.5%</td><td><span class="chg new">신규</span></td></tr><tr><td>G마켓</td><td class='num'>1</td><td class='num'>0.5%</td><td><span class="chg new">신규</span></td></tr><tr><td>쇼룸</td><td class='num'>1</td><td class='num'>0.5%</td><td><span class="chg down">-66.7%</span></td></tr><tr><td>옥션</td><td class='num'>1</td><td class='num'>0.5%</td><td><span class="chg new">신규</span></td></tr><tr><td>지그재그</td><td class='num'>1</td><td class='num'>0.5%</td><td><span class="chg new">신규</span></td></tr></tbody>
+    </table>
+    <div class="caption">판매처별 수량·비중·증감 (표기명 통일 적용, 매핑에 없는 판매처는 원문 그대로 표시)</div>
+  </div>
+</section>
+
+<p class='note warn'>판매처 매핑에 없어 원문 그대로 표시한 미분류 채널: 11번가, G마켓, 쇼룸, 옥션, 유튜브쇼핑, 지그재그 — 필요 시 매핑표에 추가하세요.</p>
+
+<section class="card">
+  <h2>④ 재고 부담 (재고과다 주의)</h2>
+  <p class="note">안전재고가 0으로 설정되어 있어, 최근7일판매=0 이고 2개월판매=0 이면서 현재고>0인 SKU를 정체재고로 판정했습니다.
+  정체재고: <b>83건</b> (전체 270개 중 30.7%), 묶여있는 수량 <b>790개</b>,
+  금액 환산 <b>34,038,300원 (판매가 기준)</b>.</p>
+  <div class="grid2">
+    <div class="chart-box">
+      <canvas id="chart4"></canvas>
+      <div class="caption">모델명별 정체재고 수량 (상위 8개) — 어느 모델에 재고가 묶여있나?</div>
+    </div>
+    <div class="table-box">
+      <table>
+        <thead><tr><th>상품코드</th><th>상품명</th><th>브랜드</th><th>현재고</th></tr></thead>
+        <tbody><tr><td>DPW771-BK245</td><td>DPW771BK 바오지 여성 러닝화 블랙 245</td><td>바오지</td><td class='num'>89</td></tr><tr><td>BJW1170-BKSL255</td><td>BJW1170BKSL 바오지 여성 러닝화 블랙실버 255</td><td>바오지</td><td class='num'>41</td></tr><tr><td>BJM931-BK265</td><td>BJM931BK 바오지 남성 러닝화 블랙 265</td><td>바오지</td><td class='num'>39</td></tr><tr><td>DPM641-WHOR265</td><td>DPM641WHOR 바오지 남성 러닝화 화이트오렌지 265</td><td>바오지</td><td class='num'>28</td></tr><tr><td>BJM1133-WHDB265</td><td>BJM1133WHDB 바오지 남성 배드민턴화 화이트딥블루 265</td><td>바오지</td><td class='num'>28</td></tr></tbody>
+      </table>
+      <div class="caption">정체재고 중 현재고 상위 5개 SKU</div>
+    </div>
+  </div>
+</section>
+
+
+<section class="card">
+  <h2>⑤ 전일 매출 실적</h2>
+  <p class="note">기준일 <b>2026-09-04</b> vs 비교일(직전 판매일) <b>2026-09-03</b> · 일반판매 기준.</p>
+  <div class="warnbox">실제 어제(2026-09-06) 데이터가 없어 최근 영업일(2026-09-04) 기준으로 대체했습니다.</div>
+  <div class='note'>단가 미매칭 8건 / 8개 (0.68%) — 매출 미포함(샘플발송 등)</div>
+  <div class="kpi-strip small">
+    <div class="kpi-tile"><div class="kpi-label">수량</div><div class="kpi-value">14개</div><div><span class="chg down">-86.7%</span> (전일 105개)</div></div>
+    <div class="kpi-tile"><div class="kpi-label">매출액</div><div class="kpi-value">590,600원</div><div><span class="chg down">-80.1%</span> (전일 2,974,300원)</div></div>
+    <div class="kpi-tile"><div class="kpi-label">건수</div><div class="kpi-value">13건</div><div><span class="chg down">-63.9%</span> (전일 36건)</div></div>
+  </div>
+  <div class="grid2">
+    <div class="chart-box">
+      <canvas id="chart5b"></canvas>
+      <div class="caption">브랜드별 매출액 비교 (기준일 vs 비교일)</div>
+    </div>
+    <div class="chart-box">
+      <canvas id="chart5c"></canvas>
+      <div class="caption">카테고리별 매출액 (상위 5 + 기타, 기준일)</div>
+    </div>
+  </div>
+  <div class="table-box full">
+    <table>
+      <thead><tr><th>브랜드</th><th>수량</th><th>매출액</th><th>증감</th></tr></thead>
+      <tbody><tr><td>바오지</td><td class='num'>12</td><td class='num'>538,800원</td><td><span class="chg down">-45.5%</span></td></tr><tr><td>볼트겔</td><td class='num'>1</td><td class='num'>8,900원</td><td><span class="chg down">-97.3%</span></td></tr><tr><td>아이두젠</td><td class='num'>1</td><td class='num'>42,900원</td><td><span class="chg down">-97.4%</span></td></tr></tbody>
+    </table>
+    <div class="caption">브랜드별 수량·매출액·증감률 (기준일 2026-09-04)</div>
+  </div>
+  <p class="note">출고유형별 수량(기준일, 매출 아님): 일반판매 14개 · 체험단 10개 ·
+  샘플발송 0개 · 기타 0개.</p>
+</section>
+
+
+<footer>
+  데이터 파일: data_admin.xlsx (수정: 2026-09-04 20:31:39) · 재고현황 270행 · 주문로그 1173행 ·
+  리포트 생성: 2026-09-07 (스케줄 작업 자동 실행)
+</footer>
+
+<script>
+const D = {"meta": {"run_date": "2026-09-07", "src_mtime": "2026-09-04 20:31:39", "n_stock_rows": 270, "n_log_rows": 1173, "latest_data_date": "2026-09-04", "ref_date": "2026-09-04", "comp_date": "2026-09-03", "fallback_note": "실제 어제(2026-09-06) 데이터가 없어 최근 영업일(2026-09-04) 기준으로 대체했습니다.", "unclassified_channels": ["11번가", "G마켓", "쇼룸", "옥션", "유튜브쇼핑", "지그재그"], "unmatched_price_rows": 8, "unmatched_price_units": 8, "unmatched_price_all_nonsale": true, "unmatched_code_count": 0}, "sec1": {"count": 18, "chart": {"labels": ["BJW1090", "BJM898", "ECW304", "DPM644", "DPW770", "BJM946", "DPM647", "BJW1133"], "data": [37.0, 26.0, 10.0, 7.0, 4.0, 3.0, 2.0, 1.0]}, "table": [{"상품코드": "BJM898-GNBK270", "상품명": "BJM898GNBK 바오지 남성 기능화 그린블랙 270", "브랜드": "바오지", "현재고": 10, "부족수량": 18}, {"상품코드": "BJW1090-WH235", "상품명": "BJW1090WH 바오지 여성 데일리화 화이트 235", "브랜드": "바오지", "현재고": 6, "부족수량": 15}, {"상품코드": "ECW304-WHPK235", "상품명": "ECW304WHPK 바오지 여성 러닝화 화이트핑크 235", "브랜드": "바오지", "현재고": 12, "부족수량": 8}, {"상품코드": "BJW1090-WH240", "상품명": "BJW1090WH 바오지 여성 데일리화 화이트 240", "브랜드": "바오지", "현재고": 16, "부족수량": 8}, {"상품코드": "BJW1090-WH255", "상품명": "BJW1090WH 바오지 여성 데일리화 화이트 255", "브랜드": "바오지", "현재고": 1, "부족수량": 7}]}, "sec2": {"count": 7, "chart_brand": {"labels": ["바오지"], "data": [7]}, "chart_model": {"labels": ["BJW1133", "BJW1090", "DPM644", "DPW770"], "data": [3, 2, 1, 1]}, "table": [{"상품코드": "DPM644-BK280", "상품명": "DPM644BK 바오지 남성 러닝화 블랙 280", "현재고": 0, "dailyRate": 0.02, "소진일수": 0.0, "usedFallback": true}, {"상품코드": "BJW1090-WH255", "상품명": "BJW1090WH 바오지 여성 데일리화 화이트 255", "현재고": 1, "dailyRate": 0.29, "소진일수": 3.5, "usedFallback": false}, {"상품코드": "DPW770-PK235", "상품명": "DPW770PK 바오지 여성 러닝화 핑크 235", "현재고": 1, "dailyRate": 0.29, "소진일수": 3.5, "usedFallback": false}, {"상품코드": "BJW1133-WHGY240", "상품명": "BJW1133WHGY 바오지 여성 배드민턴화 화이트그레이 240", "현재고": 1, "dailyRate": 0.29, "소진일수": 3.5, "usedFallback": false}, {"상품코드": "BJW1090-WH235", "상품명": "BJW1090WH 바오지 여성 데일리화 화이트 235", "현재고": 6, "dailyRate": 1.57, "소진일수": 3.8, "usedFallback": false}]}, "sec3": {"win_cur": ["2026-08-27", "2026-08-28", "2026-08-31", "2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04"], "win_prev": ["2026-08-18", "2026-08-19", "2026-08-20", "2026-08-21", "2026-08-24", "2026-08-25", "2026-08-26"], "chartA": {"labels": ["2026-08-18", "2026-08-19", "2026-08-20", "2026-08-21", "2026-08-24", "2026-08-25", "2026-08-26", "2026-08-27", "2026-08-28", "2026-08-31", "2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04"], "data": [44, 55, 104, 9, 35, 9, 17, 19, 14, 26, 31, 12, 105, 14], "split_index": 7}, "chartB": {"labels": ["바오지", "볼트겔", "아이두젠"], "cur": [126, 46, 49], "prev": [205, 7, 61]}, "model_table": [{"모델명": "-", "cur_qty": 46, "prev_qty": 7, "change_pct": 557.1, "is_new": false}, {"모델명": "BJW1090", "cur_qty": 40, "prev_qty": 23, "change_pct": 73.9, "is_new": false}, {"모델명": "BJW1179", "cur_qty": 20, "prev_qty": 23, "change_pct": -13.0, "is_new": false}, {"모델명": "ECW304", "cur_qty": 19, "prev_qty": 25, "change_pct": -24.0, "is_new": false}, {"모델명": "S-10HA", "cur_qty": 17, "prev_qty": 4, "change_pct": 325.0, "is_new": false}], "channel_table": [{"판매처": "쿠팡로켓", "qty": 85, "share_pct": 38.5, "change_pct": 117.9, "is_new": false}, {"판매처": "자사몰", "qty": 83, "share_pct": 37.6, "change_pct": -17.8, "is_new": false}, {"판매처": "스토어팜", "qty": 31, "share_pct": 14.0, "change_pct": -20.5, "is_new": false}, {"판매처": "아이두젠몰", "qty": 15, "share_pct": 6.8, "change_pct": 400.0, "is_new": false}, {"판매처": "알리", "qty": 2, "share_pct": 0.9, "change_pct": -50.0, "is_new": false}, {"판매처": "11번가", "qty": 1, "share_pct": 0.5, "change_pct": null, "is_new": true}, {"판매처": "G마켓", "qty": 1, "share_pct": 0.5, "change_pct": null, "is_new": true}, {"판매처": "쇼룸", "qty": 1, "share_pct": 0.5, "change_pct": -66.7, "is_new": false}, {"판매처": "옥션", "qty": 1, "share_pct": 0.5, "change_pct": null, "is_new": true}, {"판매처": "지그재그", "qty": 1, "share_pct": 0.5, "change_pct": null, "is_new": true}]}, "sec4": {"count": 83, "total_skus": 270, "share_pct": 30.7, "tied_qty": 790, "tied_value": 34038300.0, "chart": {"labels": ["BJM1133", "BJM845", "BJM931", "DPW771", "BJW1133", "DPM641", "BJW1170", "BJM943"], "data": [186, 150, 129, 113, 73, 53, 41, 33]}, "table": [{"상품코드": "DPW771-BK245", "상품명": "DPW771BK 바오지 여성 러닝화 블랙 245", "브랜드": "바오지", "현재고": 89, "온라인판매가": 44900.0}, {"상품코드": "BJW1170-BKSL255", "상품명": "BJW1170BKSL 바오지 여성 러닝화 블랙실버 255", "브랜드": "바오지", "현재고": 41, "온라인판매가": 44900.0}, {"상품코드": "BJM931-BK265", "상품명": "BJM931BK 바오지 남성 러닝화 블랙 265", "브랜드": "바오지", "현재고": 39, "온라인판매가": 44900.0}, {"상품코드": "DPM641-WHOR265", "상품명": "DPM641WHOR 바오지 남성 러닝화 화이트오렌지 265", "브랜드": "바오지", "현재고": 28, "온라인판매가": 44900.0}, {"상품코드": "BJM1133-WHDB265", "상품명": "BJM1133WHDB 바오지 남성 배드민턴화 화이트딥블루 265", "브랜드": "바오지", "현재고": 28, "온라인판매가": 49900.0}], "value_basis": "판매가 기준"}, "sec5": {"ref_date": "2026-09-04", "comp_date": "2026-09-03", "fallback_note": "실제 어제(2026-09-06) 데이터가 없어 최근 영업일(2026-09-04) 기준으로 대체했습니다.", "kpi": {"qty": {"cur": 14, "prev": 105, "chg": -86.7}, "revenue": {"cur": 590600.0, "prev": 2974300.0, "chg": -80.1}, "lines": {"cur": 13, "prev": 36, "chg": -63.9}}, "brand_table": [{"브랜드": "바오지", "qty": 12, "revenue": 538800.0, "qty_chg": -45.5, "rev_chg": -45.5}, {"브랜드": "볼트겔", "qty": 1, "revenue": 8900.0, "qty_chg": -97.6, "rev_chg": -97.3}, {"브랜드": "아이두젠", "qty": 1, "revenue": 42900.0, "qty_chg": -97.6, "rev_chg": -97.4}], "chartB": {"labels": ["바오지", "볼트겔", "아이두젠"], "cur": [538800.0, 8900.0, 42900.0], "prev": [987800.0, 334300.0, 1652200.0]}, "chartC_category": {"labels": ["라이프스타일(데일리)", "퍼포먼스(러닝)", "스포츠선글라스", "테이프"], "data": [404100.0, 134700.0, 42900.0, 8900.0]}, "top5_model_revenue": [{"모델명": "BJW1090", "revenue": 224500.0}, {"모델명": "BJW1179", "revenue": 179600.0}, {"모델명": "ECW304", "revenue": 89800.0}, {"모델명": "DPW770", "revenue": 44900.0}, {"모델명": "X-20FS", "revenue": 42900.0}, {"모델명": "기타", "revenue": 8900.0}], "type_summary": {"일반판매": 14, "체험단": 10, "샘플발송": 0, "기타": 0}, "unmatched_warning_pct": 0.68}};
+const COLORS = { blue:'#2563eb', green:'#16a34a', red:'#dc2626', grey:'#9aa0ab', amber:'#f59e0b', purple:'#7c3aed' };
+Chart.defaults.font.family = "'Malgun Gothic','Apple SD Gothic Neo',sans-serif";
+Chart.defaults.color = '#374151';
+
+new Chart(document.getElementById('chart1'), {
+  type:'bar',
+  data:{ labels:D.sec1.chart.labels, datasets:[{ label:'부족수량', data:D.sec1.chart.data, backgroundColor:COLORS.red }] },
+  options:{ indexAxis:'y', plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true}} }
+});
+
+new Chart(document.getElementById('chart2brand'), {
+  type:'bar',
+  data:{ labels:D.sec2.chart_brand.labels, datasets:[{ label:'소진임박 SKU수', data:D.sec2.chart_brand.data, backgroundColor:COLORS.amber }] },
+  options:{ plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true, ticks:{stepSize:1}}} }
+});
+new Chart(document.getElementById('chart2model'), {
+  type:'bar',
+  data:{ labels:D.sec2.chart_model.labels, datasets:[{ label:'소진임박 SKU수', data:D.sec2.chart_model.data, backgroundColor:COLORS.amber }] },
+  options:{ plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true, ticks:{stepSize:1}}} }
+});
+
+new Chart(document.getElementById('chart3a'), {
+  type:'bar',
+  data:{ labels:D.sec3.chartA.labels, datasets:[{
+    label:'일별 판매수량', data:D.sec3.chartA.data,
+    backgroundColor: D.sec3.chartA.labels.map((_,i)=> i < D.sec3.chartA.split_index ? COLORS.grey : COLORS.blue)
+  }] },
+  options:{ plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}} }
+});
+
+new Chart(document.getElementById('chart3b'), {
+  type:'bar',
+  data:{ labels:D.sec3.chartB.labels, datasets:[
+    { label:'이전 구간', data:D.sec3.chartB.prev, backgroundColor:COLORS.grey },
+    { label:'최근 구간', data:D.sec3.chartB.cur, backgroundColor:COLORS.blue }
+  ]},
+  options:{ scales:{y:{beginAtZero:true}} }
+});
+
+new Chart(document.getElementById('chart4'), {
+  type:'bar',
+  data:{ labels:D.sec4.chart.labels, datasets:[{ label:'정체재고 수량', data:D.sec4.chart.data, backgroundColor:COLORS.purple }] },
+  options:{ indexAxis:'y', plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true}} }
+});
+
+new Chart(document.getElementById('chart5b'), {
+  type:'bar',
+  data:{ labels:D.sec5.chartB.labels, datasets:[
+    { label:'비교일', data:D.sec5.chartB.prev, backgroundColor:COLORS.grey },
+    { label:'기준일', data:D.sec5.chartB.cur, backgroundColor:COLORS.blue }
+  ]},
+  options:{ scales:{y:{beginAtZero:true}} }
+});
+
+new Chart(document.getElementById('chart5c'), {
+  type:'bar',
+  data:{ labels:D.sec5.chartC_category.labels, datasets:[{ label:'매출액', data:D.sec5.chartC_category.data, backgroundColor:COLORS.green }] },
+  options:{ plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}} }
+});
+</script>
