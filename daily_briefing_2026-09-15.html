@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>바오지 일일 판매·재고 브리핑 2026-09-15</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --up: #16a34a; --down: #dc2626; --new: #2563eb; --flat:#64748b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Malgun Gothic","Apple SD Gothic Neo",sans-serif;
+    background:#f1f5f9; color:#0f172a; margin:0; padding:24px;
+  }
+  h1 { font-size:22px; margin-bottom:4px; }
+  .subtitle { color:#475569; margin-bottom:20px; font-size:13px; }
+  .kpi-strip { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:24px; }
+  .kpi-strip.small { grid-template-columns:repeat(3,1fr); margin-bottom:8px; }
+  .kpi-tile { background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:14px 16px; }
+  .kpi-label { font-size:12px; color:#64748b; margin-bottom:6px; }
+  .kpi-value { font-size:22px; font-weight:700; }
+  .kpi-sub { font-size:12px; color:#94a3b8; margin-top:4px; }
+  .card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:20px 22px; margin-bottom:20px; }
+  .card h2 { font-size:17px; margin:0 0 10px 0; border-left:4px solid #2563eb; padding-left:10px; }
+  .note { background:#f8fafc; border:1px dashed #cbd5e1; border-radius:8px; padding:8px 12px; font-size:12.5px; color:#475569; margin:0 0 14px 0; }
+  .warnbox { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; border-radius:8px; padding:10px 14px; font-size:13px; margin-bottom:14px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { border-bottom:1px solid #e2e8f0; padding:6px 8px; text-align:left; }
+  th { background:#f8fafc; color:#334155; }
+  td.num, td.warn { text-align:right; }
+  .warn { color:#dc2626; font-weight:600; }
+  .caption { font-size:12px; color:#64748b; margin:6px 0 14px 0; }
+  .interp { font-size:13px; color:#1e293b; background:#f8fafc; border-radius:8px; padding:10px 12px; margin-top:8px; }
+  .up { color:var(--up); font-weight:600; }
+  .down { color:var(--down); font-weight:600; }
+  .flat { color:var(--flat); }
+  .tag { display:inline-block; font-size:11px; padding:1px 6px; border-radius:10px; margin-left:4px; }
+  .tag.new { background:#dbeafe; color:#1d4ed8; }
+  .tag.src7 { background:#fef9c3; color:#854d0e; }
+  .tag.src60 { background:#e0e7ff; color:#3730a3; }
+  canvas { max-height:260px; }
+  footer { font-size:11px; color:#94a3b8; text-align:center; padding:16px 0; }
+  .print-btn { position:fixed; top:20px; right:20px; background:#2563eb; color:#fff; border:none;
+    padding:10px 16px; border-radius:8px; cursor:pointer; font-size:13px; }
+  @media print {
+    body { background:#fff; padding:0; }
+    .print-btn { display:none; }
+    .card { break-inside: avoid; border:1px solid #ccc; box-shadow:none; }
+    @page { size: A4 portrait; margin: 12mm; }
+  }
+</style>
+</head>
+<body>
+<button class="print-btn" onclick="window.print()">🖨 인쇄 (A4/A3)</button>
+<h1>바오지 · 아이두젠 · 볼트겔 일일 판매·재고 브리핑</h1>
+<div class="subtitle">기준일 2026-09-15 · 생성 2026-09-16</div>
+
+
+<div class="kpi-strip">
+  <div class="kpi-tile">
+    <div class="kpi-label">발주필요 건수</div>
+    <div class="kpi-value">31건</div>
+    <div class="kpi-sub">전체 347개 SKU 중</div>
+  </div>
+  <div class="kpi-tile">
+    <div class="kpi-label">소진임박 건수</div>
+    <div class="kpi-value">11건</div>
+    <div class="kpi-sub">7일 내 소진 예상</div>
+  </div>
+  <div class="kpi-tile">
+    <div class="kpi-label">기준일 매출액 (2026-09-15)</div>
+    <div class="kpi-value">1,095,300원</div>
+    <div class="kpi-sub">일반판매 기준</div>
+  </div>
+  <div class="kpi-tile">
+    <div class="kpi-label">전일 대비 증감률</div>
+    <div class="kpi-value"><span class="down">-73.8%</span></div>
+    <div class="kpi-sub">비교일 2026-09-14</div>
+  </div>
+</div>
+
+
+<section class="card">
+  <h2>① 발주 필요</h2>
+  <p class="note">안전재고가 전 SKU에서 0으로 설정되어 있어, 적용기준재고는 2개월판매 실적으로 대체 산정되었습니다.
+  단, 2개월판매에는 체험단·샘플발송·CS출고 수량이 포함되어 있어 실제 필요 발주량보다 과대 산정될 수 있습니다.</p>
+  <div class="grid2">
+    <div>
+      <canvas id="chart1"></canvas>
+      <div class="caption">모델명별 부족수량 합계 (상위 8개) — 어느 모델의 결품 리스크가 큰가?</div>
+    </div>
+    <div>
+      <table>
+        <thead><tr><th>상품코드</th><th>상품명</th><th>브랜드</th><th>현재고</th><th>부족수량</th></tr></thead>
+        <tbody><tr><td>BJW1090-WH240</td><td>BJW1090WH 바오지 여성 데일리화 화이트 240</td><td>바오지</td><td>5</td><td class='num warn'>29</td></tr><tr><td>BJW1090-WH235</td><td>BJW1090WH 바오지 여성 데일리화 화이트 235</td><td>바오지</td><td>0</td><td class='num warn'>26</td></tr><tr><td>BJW1090-WH245</td><td>BJW1090WH 바오지 여성 데일리화 화이트 245</td><td>바오지</td><td>10</td><td class='num warn'>18</td></tr><tr><td>BJW1090-WH250</td><td>BJW1090WH 바오지 여성 데일리화 화이트 250</td><td>바오지</td><td>6</td><td class='num warn'>16</td></tr><tr><td>BJ5112-BG10</td><td>BAOJI 바쿠백 A</td><td>바오지</td><td>-3</td><td class='num warn'>15</td></tr></tbody>
+      </table>
+      <div class="caption">부족수량 상위 5개 SKU</div>
+    </div>
+  </div>
+  <p class="interp">발주필요 31건(8.9%) 중 BJW1090(여성 데일리화)이 부족수량 비중이 가장 크며,
+  체험단·샘플 수량을 제외하면 실제 발주 필요량은 표시된 값보다 낮을 수 있습니다.</p>
+</section>
+
+
+<section class="card">
+  <h2>② 소진임박 경고</h2>
+  <p class="note">안전재고 미설정으로 최근7일판매 기반 일판매율을 우선 사용하고, 7일 판매가 0인 경우 2개월판매÷60으로 대체했습니다.
+  7일 기준 판매율은 프로모션 직후 스파이크가 있으면 소진 임박도를 과대평가할 수 있습니다.</p>
+  <div class="grid2">
+    <div>
+      <canvas id="chart2a"></canvas>
+      <div class="caption">브랜드별 소진임박 SKU 건수 — 어느 브랜드가 가장 위험한가?</div>
+    </div>
+    <div>
+      <canvas id="chart2b"></canvas>
+      <div class="caption">모델명별 소진임박 SKU 건수 (상위 8개)</div>
+    </div>
+  </div>
+  <table>
+    <thead><tr><th>상품코드</th><th>상품명</th><th>현재고</th><th>일판매율</th><th>예상 소진일수</th></tr></thead>
+    <tbody><tr><td>DPM644-BK280</td><td>DPM644BK 바오지 남성 러닝화 블랙 280</td><td>0</td><td>0.02</td><td>0.0일 <span class='tag src60'>60일기준</span></td></tr><tr><td>BJW1090-WH235</td><td>BJW1090WH 바오지 여성 데일리화 화이트 235</td><td>0</td><td>0.57</td><td>0.0일 <span class='tag src7'>7일기준</span></td></tr><tr><td>BUAG-131042</td><td>뷰엔아미고 팝업 텐트 3P 라이트그레이</td><td><span class='warn'>-1(마이너스재고)</span></td><td>0.14</td><td>0.0일 <span class='tag src7'>7일기준</span></td></tr><tr><td>BUAG-121012</td><td>뷰엔아미고 오토 텐트 4 베이지</td><td><span class='warn'>-1(마이너스재고)</span></td><td>0.14</td><td>0.0일 <span class='tag src7'>7일기준</span></td></tr><tr><td>BJ5112-BG10</td><td>BAOJI 바쿠백 A</td><td><span class='warn'>-3(마이너스재고)</span></td><td>1.71</td><td>0.0일 <span class='tag src7'>7일기준</span></td></tr></tbody>
+  </table>
+  <div class="caption">소진일수 기준 가장 시급한 5개 SKU (음수 재고는 0일로 표기, 이미 결품·초과판매 상태)</div>
+  <p class="interp">소진임박 11건 중 바오지 브랜드가 대부분을 차지합니다. 마이너스 재고 SKU(3건: BUAG-121012, BUAG-131042, BJ5112-BG10)는
+  이미 결품 후 초과판매가 발생한 상태로, 가장 먼저 확인이 필요합니다.</p>
+</section>
+
+
+<section class="card">
+  <h2>③ 판매 동향 (최근 7일, 일반판매 기준)</h2>
+  <p class="note">주문로그는 데이터가 있는 날짜만 존재하는 희소 데이터입니다. 달력상 최근 7일이 아니라
+  <b>데이터가 존재하는 최근 7개 판매일(2026-09-07 ~ 2026-09-15)</b>과 그 직전 7개 판매일
+  (2026-08-27 ~ 2026-09-04)을 비교했습니다.</p>
+  <canvas id="chart3a"></canvas>
+  <div class="caption">최근 14개 판매일 일별 수량 — 회색은 직전 기간, 파랑은 최근 기간</div>
+  <div class="grid2" style="margin-top:16px;">
+    <div>
+      <canvas id="chart3b"></canvas>
+      <div class="caption">브랜드별 수량 — 최근 기간 vs 직전 기간</div>
+    </div>
+    <div>
+      <table>
+        <thead><tr><th>모델명</th><th>최근</th><th>직전</th><th>증감</th></tr></thead>
+        <tbody><tr><td>테이프(모델명미지정)</td><td>139</td><td>46</td><td><span class="up">+202.2%</span></td></tr><tr><td>BJW1090</td><td>52</td><td>40</td><td><span class="up">+30.0%</span></td></tr><tr><td>BJW1179</td><td>46</td><td>20</td><td><span class="up">+130.0%</span></td></tr><tr><td>가방(모델명미지정)</td><td>44</td><td>0</td><td><span class="tag new">신규</span></td></tr><tr><td>거치대(모델명미지정)</td><td>27</td><td>0</td><td><span class="tag new">신규</span></td></tr></tbody>
+      </table>
+      <div class="caption">모델명별 판매 수량 상위 5 (일반판매)</div>
+    </div>
+  </div>
+  <table style="margin-top:12px;">
+    <thead><tr><th>판매처(정규화)</th><th>수량</th><th>비중</th><th>증감</th></tr></thead>
+    <tbody><tr><td>쿠팡로켓</td><td>235</td><td>48.7%</td><td><span class="up">+176.5%</span></td></tr><tr><td>자사몰</td><td>143</td><td>29.6%</td><td><span class="up">+72.3%</span></td></tr><tr><td>스토어팜</td><td>66</td><td>13.7%</td><td><span class="up">+112.9%</span></td></tr><tr><td>미분류(네이버)</td><td>20</td><td>4.1%</td><td><span class="tag new">신규</span></td></tr><tr><td>알리</td><td>8</td><td>1.7%</td><td><span class="up">+300.0%</span></td></tr><tr><td>아이두젠몰</td><td>7</td><td>1.4%</td><td><span class="down">-53.3%</span></td></tr><tr><td>미분류(11번가)</td><td>2</td><td>0.4%</td><td><span class="up">+100.0%</span></td></tr><tr><td>미분류(쇼룸)</td><td>2</td><td>0.4%</td><td><span class="up">+100.0%</span></td></tr><tr><td>미분류(G마켓)</td><td>0</td><td>0.0%</td><td><span class="down">-100.0%</span></td></tr><tr><td>미분류(옥션)</td><td>0</td><td>0.0%</td><td><span class="down">-100.0%</span></td></tr><tr><td>미분류(지그재그)</td><td>0</td><td>0.0%</td><td><span class="down">-100.0%</span></td></tr></tbody>
+  </table>
+  <div class="caption">판매처별 수량 (중복 표기 통합) — 미분류(원본명)은 채널맵에 추가가 필요합니다</div>
+  <p class="interp">최근 기간 판매량이 직전 대비 크게 증가했으며(9/14일 158개 스파이크 포함), 쿠팡로켓이 전체의 절반 가까이를 차지합니다.
+  미분류 판매처(11번가, G마켓, 네이버, 샘플출고, 쇼룸, 옥션, 유튜브쇼핑, 지그재그)가 새로 발견되어 채널맵 업데이트가 필요합니다.</p>
+</section>
+
+
+<section class="card">
+  <h2>④ 재고 부담 (재고과다 주의)</h2>
+  <p class="note">안전재고 미설정으로 "최근7일판매=0 AND 2개월판매=0 AND 현재고&gt;0" 조건으로 대체 판정했습니다.
+  입고단가가 전 SKU에서 0으로 기록되어 있어 가치는 온라인판매가(판매가 기준)으로 계산했습니다(원가 기준 아님).</p>
+  <div class="grid2">
+    <div>
+      <canvas id="chart4"></canvas>
+      <div class="caption">모델명별 장기체류 재고 수량 (상위 8개)</div>
+    </div>
+    <div>
+      <table>
+        <thead><tr><th>상품코드</th><th>상품명</th><th>브랜드</th><th>현재고</th></tr></thead>
+        <tbody><tr><td>DPW771-BK245</td><td>DPW771BK 바오지 여성 러닝화 블랙 245</td><td>바오지</td><td>89</td></tr><tr><td>BUAG-173010</td><td>뷰엔아미고 크로스백 블랙</td><td>뷰엔아미고 49%</td><td>30</td></tr><tr><td>BUAG-183030</td><td>뷰엔아미고 심플 토트백 라이트베이지</td><td>뷰엔아미고 49%</td><td>30</td></tr><tr><td>BUAG-173030</td><td>뷰엔아미고 크로스백 웜베이지</td><td>뷰엔아미고 49%</td><td>30</td></tr><tr><td>BUAG-193080</td><td>뷰엔아미고 미니 숄더백 라이트카키</td><td>뷰엔아미고 49%</td><td>30</td></tr></tbody>
+      </table>
+      <div class="caption">현재고 기준 상위 5개 장기체류 SKU</div>
+    </div>
+  </div>
+  <p class="interp">전체 347개 SKU 중 88개(25.4%)가 최근 2개월간 판매 이력이 없는 장기체류 재고이며,
+  묶여있는 수량은 1,001개, 판매가 기준 가치는 약 28,404,900원입니다.
+  가방류(뷰엔아미고 크로스백·토트백 등)와 BJM845 모델의 비중이 큽니다.</p>
+</section>
+
+
+<section class="card">
+  <h2>⑤ 전일 매출 실적 — 기준일 2026-09-15 vs 비교일(직전 영업일) 2026-09-14</h2>
+  
+  <div class="warnbox">⚠ 가격 미매칭 경고: 기준일 일반판매 중 18건(19개, 전체 수량의 41.3%)이
+    상품코드에 매칭되는 온라인판매가가 없어 매출 0원으로 집계되었습니다. 이 카테고리는 매출액이 실제보다 과소 표시될 수 있습니다.</div>
+  
+<div class="kpi-strip small">
+  <div class="kpi-tile">
+    <div class="kpi-label">수량</div>
+    <div class="kpi-value">46개</div>
+    <div class="kpi-sub"><span class="down">-70.9%</span> (전일 158개)</div>
+  </div>
+  <div class="kpi-tile">
+    <div class="kpi-label">매출액</div>
+    <div class="kpi-value">1,095,300원</div>
+    <div class="kpi-sub"><span class="down">-73.8%</span> (전일 4,176,500원)</div>
+  </div>
+  <div class="kpi-tile">
+    <div class="kpi-label">주문건수</div>
+    <div class="kpi-value">43건</div>
+    <div class="kpi-sub"><span class="down">-52.2%</span> (전일 90건)</div>
+  </div>
+</div>
+
+  <div class="grid2" style="margin-top:16px;">
+    <div>
+      <canvas id="chart5b"></canvas>
+      <div class="caption">브랜드별 매출액 — 기준일 vs 비교일</div>
+    </div>
+    <div>
+      <canvas id="chart5c"></canvas>
+      <div class="caption">카테고리별 매출액 (상위5+기타)</div>
+    </div>
+  </div>
+  <table style="margin-top:12px;">
+    <thead><tr><th>브랜드</th><th>수량</th><th>매출액</th><th>증감률</th></tr></thead>
+    <tbody><tr><td>바오지</td><td>32</td><td>1,077,600원</td><td><span class="down">-41.5%</span></td></tr><tr><td>볼트겔</td><td>3</td><td>17,700원</td><td><span class="down">-95.3%</span></td></tr><tr><td>뷰엔아미고 49%</td><td>11</td><td>0원</td><td><span class="flat">0.0%</span></td></tr><tr><td>선글라스</td><td>0</td><td>0원</td><td><span class="down">-100.0%</span></td></tr></tbody>
+  </table>
+  <p class="interp">기준일 매출은 전일 대비 <span class="down">-73.8%</span>, 수량은 <span class="down">-70.9%</span>입니다.
+  일반판매 외 일반판매 46개, 체험단 2개은(는) 별도 비매출 출고로 집계에서 제외했습니다.</p>
+</section>
+
+
+<footer>
+  데이터 파일: data_admin.xlsx (수정시각 2026-09-15 20:30 (KST)) · 재고현황 347행 · 주문로그 1,453행 ·
+  실행시각: 2026-09-16 (자동 생성)<br>
+  참고: 브랜드값 "뷰엔아미고 49%" 는 원본 데이터에 그대로 남아있는 값으로, 오탈자 여부 확인이 필요합니다.
+  마이너스 현재고 SKU 3건 발견(BUAG-121012, BUAG-131042, BJ5112-BG10).
+</footer>
+
+
+<script>
+const chartDefaults = { responsive:true, plugins:{legend:{display:false}} };
+
+new Chart(document.getElementById('chart1'), {
+  type:'bar',
+  data:{ labels:["BJW1090", "가방(모델명미지정)", "ECW304", "BJM898", "DPM644", "DPW770", "BJW1179", "텐트(모델명미지정)"], datasets:[{ label:'부족수량', data:[109, 34, 23, 18, 9, 8, 6, 4], backgroundColor:'#f97316' }] },
+  options:{ indexAxis:'y', responsive:true, plugins:{legend:{display:false}} }
+});
+
+new Chart(document.getElementById('chart2a'), {
+  type:'bar',
+  data:{ labels:["바오지", "뷰엔아미고 49%"], datasets:[{ label:'건수', data:[9, 2], backgroundColor:'#dc2626' }] },
+  options: chartDefaults
+});
+new Chart(document.getElementById('chart2b'), {
+  type:'bar',
+  data:{ labels:["BJW1090", "가방(모델명미지정)", "텐트(모델명미지정)", "DPM644"], datasets:[{ label:'건수', data:[4, 4, 2, 1], backgroundColor:'#ea580c' }] },
+  options: chartDefaults
+});
+
+new Chart(document.getElementById('chart3a'), {
+  type:'bar',
+  data:{ labels:["08-27", "08-28", "08-31", "09-01", "09-02", "09-03", "09-04", "09-07", "09-08", "09-09", "09-10", "09-11", "09-14", "09-15"], datasets:[{ label:'수량', data:[19, 14, 26, 31, 12, 105, 14, 36, 98, 24, 57, 64, 158, 46], backgroundColor:["#94a3b8", "#94a3b8", "#94a3b8", "#94a3b8", "#94a3b8", "#94a3b8", "#94a3b8", "#2563eb", "#2563eb", "#2563eb", "#2563eb", "#2563eb", "#2563eb", "#2563eb"] }] },
+  options: chartDefaults
+});
+new Chart(document.getElementById('chart3b'), {
+  type:'bar',
+  data:{ labels:["바오지", "볼트겔", "뷰엔아미고 49%", "선글라스"], datasets:[
+    { label:'최근', data:[197, 166, 11, 109], backgroundColor:'#2563eb' },
+    { label:'직전', data:[126, 46, 0, 49], backgroundColor:'#94a3b8' }
+  ]},
+  options:{ responsive:true, plugins:{legend:{display:true, position:'bottom'}} }
+});
+
+new Chart(document.getElementById('chart4'), {
+  type:'bar',
+  data:{ labels:["가방(모델명미지정)", "BJM845", "BJM1133", "DPW771", "BJM931", "DPM641", "BJW1133", "BJM943"], datasets:[{ label:'재고수량', data:[400, 150, 113, 113, 79, 53, 42, 33], backgroundColor:'#64748b' }] },
+  options:{ indexAxis:'y', responsive:true, plugins:{legend:{display:false}} }
+});
+
+new Chart(document.getElementById('chart5b'), {
+  type:'bar',
+  data:{ labels:["바오지", "볼트겔", "뷰엔아미고 49%", "선글라스"], datasets:[
+    { label:'기준일', data:[1077600, 17700, 0, 0], backgroundColor:'#2563eb' },
+    { label:'비교일', data:[1840900, 376300, 0, 1959300], backgroundColor:'#94a3b8' }
+  ]},
+  options:{ responsive:true, plugins:{legend:{display:true, position:'bottom'}} }
+});
+new Chart(document.getElementById('chart5c'), {
+  type:'bar',
+  data:{ labels:["라이프스타일(데일리)", "퍼포먼스(러닝)", "거치대", "가방", "텐트"], datasets:[{ label:'매출액', data:[538800, 538800, 17700, 0, 0], backgroundColor:'#16a34a' }] },
+  options: chartDefaults
+});
+</script>
+</body>
+</html>
