@@ -200,6 +200,17 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .card.folded .fold-btn svg{transform:rotate(-90deg);}
 .card.folded .card-head .q{display:none;}   /* 접었을 땐 제목 한 줄만 남깁니다 */
 
+/* [2026-09-16] 추이 차트 오른쪽 위 도구 묶음 (일/주/월 + 접기) */
+.head-tools{flex:0 0 auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
+.gran{display:inline-flex;border:1px solid var(--border-default);border-radius:var(--radius-full);
+  background:rgba(17,17,17,.03);padding:2px;}
+.gran-b{font:600 11.5px/1 'Pretendard',sans-serif;color:var(--text-tertiary);
+  background:transparent;border:0;border-radius:var(--radius-full);padding:6px 11px;cursor:pointer;}
+.gran-b:hover{color:var(--text-primary);}
+.gran-b.is-on{background:#fff;color:var(--text-primary);box-shadow:0 1px 2px rgba(17,17,17,.10);}
+.card.folded .head-tools .gran{display:none;}   /* 접었을 땐 단위 버튼도 같이 숨깁니다 */
+@media print{.gran{display:none;}}
+
 .metric-toggle{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
 .metric-toggle-label{font-size:12px;font-weight:600;color:var(--text-tertiary);margin-right:2px;}
 .metric-toggle-note{font-size:11px;color:var(--text-tertiary);margin-left:6px;}
@@ -715,10 +726,19 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
             <h3 id="o-trendTitle">일별 판매수량·매출 추이</h3>
             <p class="q" id="o-trendDesc">시간에 따른 출고량과 매출 흐름은? (막대=수량, 선=매출)</p>
           </div>
-          <button type="button" class="fold-btn" id="o-trendFold" aria-expanded="true" title="접기 / 펼치기">
-            <span class="ft">접기</span>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-          </button>
+          <div class="head-tools">
+            <!-- [2026-09-16] 일/주/월 묶어보기. 일별만 보면 들쭉날쭉해서 흐름이 안 보인다는 요청.
+                 고른 값은 localStorage에 남습니다. -->
+            <div class="gran" id="o-gran" role="group" aria-label="기간 단위">
+              <button type="button" class="gran-b is-on" data-gran="day">일별</button>
+              <button type="button" class="gran-b" data-gran="week">주별</button>
+              <button type="button" class="gran-b" data-gran="month">월별</button>
+            </div>
+            <button type="button" class="fold-btn" id="o-trendFold" aria-expanded="true" title="접기 / 펼치기">
+              <span class="ft">접기</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+          </div>
         </div>
         <div class="fold-body" id="o-trendBody">
           <div class="chart-box" style="height:210px;"><canvas id="o-ch-trend"></canvas></div>
@@ -917,6 +937,8 @@ const state = {
   invFilters:{brand:'ALL',category:'ALL',model:'ALL',gender:'ALL',onlyNeed:false}, invSearch:'', invSort:{col:'needOrder',dir:-1},
   ordFilters:{brand:'ALL',category:'ALL',model:'ALL',channel:'ALL',type:'ALL',size:'ALL',gender:'ALL'}, ordSearch:'', ordSort:{col:'date',dir:-1}, ordDrills:[],
   ordPeriod:{preset:'last1m', from:'', to:''}, ordMetric:'qty',
+  // [2026-09-17] 추이 그래프를 일/주/월 중 무엇으로 묶어 볼지. localStorage에 남습니다.
+  ordGran:'day',
   charts:{}, refreshTimer:null, openMsel:null,
   promo:{rows:[], warnings:[], detailByName:{}, loaded:false, calYear:new Date().getFullYear(), calMonth:new Date().getMonth(), ganttRange:'active'},
   invByCode:{},
@@ -1906,32 +1928,101 @@ document.getElementById('o-brandCmpBody').addEventListener('click',e=>{
   sel.dispatchEvent(new Event('change'));
   window.scrollTo({top:0, behavior:'smooth'});
 });
+/* ===== [2026-09-17] 추이 그래프 일/주/월 묶어보기 ==========================
+   일별만 보면 주말·공휴일 때문에 들쭉날쭉해서 흐름이 안 보인다는 요청.
+   막대 하나가 하루 / 한 주(월~일) / 한 달을 뜻하게 묶어줍니다.
+   · 주는 ★월요일 시작★ 입니다.
+   · 막대를 누르면 그 하루/그 주/그 달로 기간이 좁혀집니다(다시 누르면 원래대로).
+   · 고른 단위는 localStorage에 남아 다음에 열어도 그대로입니다.
+   ※ 첫 칸과 마지막 칸은 조회기간에 걸친 만큼만 집계되므로 낮게 보일 수 있습니다.
+      그래서 주/월을 고르면 설명줄에 그 안내를 붙입니다.                      */
+const ORD_GRAN_KEY='baoji.ord.gran';
+const GRAN_NAME={day:'일별', week:'주별', month:'월별'};
+
+// 그 날짜가 속한 주의 월요일
+function weekStartOf(d){
+  const x=new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  x.setDate(x.getDate() - ((x.getDay()+6)%7));   // 일요일(0)을 6으로 돌려 월요일 기준으로
+  return x;
+}
+// 묶음 키 - 정렬이 되도록 항상 'YYYY-MM-DD' 또는 'YYYY-MM' 형태
+function ordGranKey(d, g){
+  if(!d) return '';
+  if(g==='month') return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  if(g==='week')  return fmtDate(weekStartOf(d));
+  return fmtDate(d);
+}
+// 화면에 보일 짧은 이름
+function ordGranLabel(k, g){
+  if(g==='month') return k;                       // 2026-08
+  if(g==='week'){
+    const s=new Date(k+'T00:00:00'); const e=new Date(s); e.setDate(e.getDate()+6);
+    return (s.getMonth()+1)+'/'+s.getDate()+'~'+(e.getMonth()+1)+'/'+e.getDate();
+  }
+  return k;                                       // 2026-08-14
+}
+// 막대를 눌렀을 때 좁힐 기간(시작일, 끝일)
+function ordGranRange(k, g){
+  if(g==='month'){
+    const y=+k.slice(0,4), m=+k.slice(5,7);
+    return [fmtDate(new Date(y,m-1,1)), fmtDate(new Date(y,m,0))];
+  }
+  if(g==='week'){
+    const s=new Date(k+'T00:00:00'); const e=new Date(s); e.setDate(e.getDate()+6);
+    return [fmtDate(s), fmtDate(e)];
+  }
+  return [k,k];
+}
+
 function renderOrdTrend(){
+  const g = state.ordGran || 'day';
   const titleEl=document.getElementById('o-trendTitle'), descEl=document.getElementById('o-trendDesc');
-  if(titleEl) titleEl.textContent = state.hasPrice ? '일별 판매수량·매출 추이' : '일별 판매수량 추이';
-  if(descEl) descEl.textContent = state.hasPrice ? '시간에 따른 출고량과 매출 흐름은? (막대=수량, 선=매출)' : '시간에 따른 출고량 흐름은?';
+  if(titleEl) titleEl.textContent = GRAN_NAME[g] + (state.hasPrice ? ' 판매수량·매출 추이' : ' 판매수량 추이');
+  if(descEl){
+    let t = state.hasPrice ? '시간에 따른 출고량과 매출 흐름은? (막대=수량, 선=매출)' : '시간에 따른 출고량 흐름은?';
+    if(g!=='day') t += ' ※ 첫 칸·마지막 칸은 기간에 걸친 만큼만 집계됩니다.';
+    descEl.textContent = t;
+  }
+  // 버튼 불 켜기 (다른 곳에서 state를 바꿔도 화면이 따라오도록 여기서 맞춥니다)
+  document.querySelectorAll('#o-gran .gran-b').forEach(b=>b.classList.toggle('is-on', b.dataset.gran===g));
+
   const rows=ordFilteredRows();
   const mQty={}, mAmt={};
-  rows.forEach(r=>{const k=fmtDate(r.date); mQty[k]=(mQty[k]||0)+r.qty; mAmt[k]=(mAmt[k]||0)+r.amount;});
-  const labels=Object.keys(mQty).sort();
-  const datasets=[{type:'bar',label:'판매수량',data:labels.map(l=>mQty[l]||0),backgroundColor:'#2C4BB8',borderRadius:3,yAxisID:'y',order:2}];
+  rows.forEach(r=>{const k=ordGranKey(r.date, g); if(!k) return; mQty[k]=(mQty[k]||0)+r.qty; mAmt[k]=(mAmt[k]||0)+r.amount;});
+  const keys=Object.keys(mQty).sort();
+  const labels=keys.map(k=>ordGranLabel(k,g));
+  const datasets=[{type:'bar',label:'판매수량',data:keys.map(k=>mQty[k]||0),backgroundColor:'#2C4BB8',borderRadius:3,yAxisID:'y',order:2}];
   // 표시제한 계정은 가격 데이터가 없어 매출선이 항상 0으로 깔리므로, 아예 선을 그리지 않음.
   if(state.hasPrice){
-    datasets.push({type:'line',label:'매출액',data:labels.map(l=>mAmt[l]||0),borderColor:'#D98A1E',backgroundColor:'#D98A1E',
+    datasets.push({type:'line',label:'매출액',data:keys.map(k=>mAmt[k]||0),borderColor:'#D98A1E',backgroundColor:'#D98A1E',
       yAxisID:'y1',tension:0.3,pointRadius:2,pointHoverRadius:4,borderWidth:2,order:1});
   }
   const scales={
-    x:{grid:{display:false},ticks:{maxRotation:0,autoSkip:true,maxTicksLimit:16}},
+    x:{grid:{display:false},ticks:{maxRotation:0,autoSkip:true,maxTicksLimit: g==='month'?24:16}},
     y:{position:'left',grid:{color:GRID},ticks:{callback:v=>fmtNum(v)}},
   };
   if(state.hasPrice) scales.y1={position:'right',grid:{display:false},ticks:{callback:v=>fmtWonAbbrev(v)}};
   mk('o-ch-trend',{type:'bar',data:{labels,datasets},
     options:{responsive:true,maintainAspectRatio:false,
-      onClick:(e,el)=>{if(el.length)applyOrdChartFilter('dateStr',labels[el[0].index]);},
+      onClick:(e,el)=>{if(el.length)applyOrdChartFilter('granBucket',keys[el[0].index]);},
       plugins:{legend:{display:true,position:'top',align:'end',labels:{boxWidth:10,boxHeight:10,padding:8,font:{size:10.5}}},
-        tooltip:{...tip,callbacks:{label:c=> c.dataset.label==='매출액' ? ` 매출액: ${fmtNum(c.parsed.y)}원` : ` 판매수량: ${fmtNum(c.parsed.y)}개`}}},
+        tooltip:{...tip,callbacks:{
+          // 주/월은 라벨만 보면 어느 기간인지 헷갈리므로 제목에 날짜 범위를 그대로 적습니다
+          title:c=>{ const k=keys[c[0].dataIndex]; if(g==='day') return k;
+                     const [a,b]=ordGranRange(k,g); return a+' ~ '+b; },
+          label:c=> c.dataset.label==='매출액' ? ` 매출액: ${fmtNum(c.parsed.y)}원` : ` 판매수량: ${fmtNum(c.parsed.y)}개`}}},
       scales}});
 }
+
+// 단위 버튼
+document.getElementById('o-gran').addEventListener('click',e=>{
+  const b=e.target.closest('.gran-b'); if(!b) return;
+  if(state.ordGran===b.dataset.gran) return;
+  state.ordGran=b.dataset.gran;
+  try{ localStorage.setItem(ORD_GRAN_KEY, state.ordGran); }catch(err){}
+  renderOrdTrend();
+});
+try{ const sv=localStorage.getItem(ORD_GRAN_KEY); if(sv && GRAN_NAME[sv]) state.ordGran=sv; }catch(err){}
 // 매출 모드에서는 도넛 대신 정렬된 가로 막대(값이 막대 끝에 바로 보임)로 표시.
 // 수량 모드는 기존 도넛을 그대로 유지.
 // [2026-08-04 추가] 비중 차트(카테고리/라인업/판매처/출고유형) 마우스오버 시 판매수량과 매출액을
@@ -2270,11 +2361,15 @@ function applyOrdSearch(code){
 
 function applyOrdChartFilter(field, value){
   const f=state.ordFilters;
-  if(field==='dateStr'){
-    // 추이 그래프에서 하루를 클릭 → 그 날짜만 보기 / 같은 날 다시 누르면 원래 기간으로
+  if(field==='dateStr' || field==='granBucket'){
+    // 추이 그래프에서 막대를 클릭 → 그 하루/그 주/그 달로 기간을 좁힘
+    // 같은 막대를 다시 누르면 원래 기간(최근 1개월)으로 되돌립니다.
+    // [2026-09-17] 주/월 단위가 생기면서 '하루'가 아니라 '구간'을 받도록 바꿨습니다.
+    const g = (field==='granBucket') ? (state.ordGran||'day') : 'day';
+    const [from,to] = ordGranRange(value, g);
     const p=state.ordPeriod;
-    const same = p.preset==='custom' && p.from===value && p.to===value;
-    state.ordPeriod = same ? {preset:'last1m',from:'',to:''} : {preset:'custom',from:value,to:value};
+    const same = p.preset==='custom' && p.from===from && p.to===to;
+    state.ordPeriod = same ? {preset:'last1m',from:'',to:''} : {preset:'custom',from:from,to:to};
     document.getElementById('o-dateFrom').value=state.ordPeriod.from||'';
     document.getElementById('o-dateTo').value=state.ordPeriod.to||'';
   }else if(field==='category'){
