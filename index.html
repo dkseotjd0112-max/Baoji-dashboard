@@ -266,6 +266,44 @@ thead th .ar{opacity:.5;font-size:9px;margin-left:3px;}
 tbody td{padding:9px 12px;border-bottom:1px solid rgba(17,17,17,.05);color:var(--text-secondary);}
 tbody tr:hover td{background:rgba(17,17,17,.03);color:var(--text-primary);}
 tbody tr.need td{background:rgba(212,47,82,.08);}
+/* [2026-10-13] 바오지 재고표 (발주서 양식) */
+#bj-table td.bj-merge{vertical-align:middle;text-align:center;border-right:1px solid var(--border-default);background:var(--bg-elevated);}
+#bj-table td.bj-img{width:120px;padding:6px;}
+#bj-table td.bj-img img{width:104px;height:auto;display:block;margin:0 auto;border-radius:6px;}
+#bj-table td.bj-model{font-weight:700;}
+#bj-table tr.bj-first td{border-top:2px solid var(--border-strong);}
+#bj-table tbody tr:hover td.bj-merge{background:var(--bg-elevated);}
+#bj-table th.num, #bj-table td.num{text-align:center;}
+#bj-card .tbl-scroll{max-height:80vh;}
+#bj-table th{text-align:center;}
+#bj-table th.bj-col-code{width:1%;}
+#bj-table td.bj-img img{cursor:zoom-in;}
+#bj-zoom{position:fixed;inset:0;background:rgba(17,17,17,.72);z-index:1100;display:flex;align-items:center;justify-content:center;padding:24px;cursor:zoom-out;}
+#bj-zoom img{max-width:min(720px,92vw);max-height:86vh;border-radius:10px;background:#fff;box-shadow:0 10px 40px rgba(0,0,0,.35);}
+#bj-zoom .cap{position:absolute;bottom:18px;left:0;right:0;text-align:center;color:#fff;font-size:13px;}
+#bj-table a.bj-code{color:var(--color-info-fg);text-decoration:underline;text-underline-offset:2px;cursor:pointer;}
+#bjd-overlay{position:fixed;inset:0;background:rgba(17,17,17,.30);z-index:1000;display:flex;align-items:stretch;justify-content:flex-end;}
+#bjd-overlay .bjd-box{background:var(--bg-elevated);width:min(820px,100%);height:100%;overflow-y:auto;padding:18px 20px;box-shadow:-8px 0 30px rgba(0,0,0,.16);border-radius:var(--radius-lg) 0 0 var(--radius-lg);animation:bjdSlide .22s ease-out;}
+@keyframes bjdSlide{from{transform:translateX(100%);}to{transform:translateX(0);}}
+@media (prefers-reduced-motion:reduce){#bjd-overlay .bjd-box{animation:none;}}
+.bjd-head{display:flex;gap:14px;align-items:center;margin-bottom:10px;}
+.bjd-thumb img{width:64px;height:64px;object-fit:contain;border-radius:8px;background:#fff;border:1px solid var(--border-default);}
+.bjd-titles{flex:1;min-width:0;}
+.bjd-title{font-weight:700;font-size:16px;color:var(--text-primary);}
+.bjd-sub{font-size:12.5px;color:var(--text-secondary);margin-top:2px;}
+.bjd-close{border:none;background:transparent;font-size:20px;cursor:pointer;color:var(--text-secondary);padding:4px 8px;}
+.bjd-period{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--text-secondary);margin-bottom:8px;}
+.bjd-period button{font:600 11.5px/1 'Pretendard',sans-serif;border:1px solid var(--border-default);background:rgba(17,17,17,.03);color:var(--text-secondary);border-radius:var(--radius-full);padding:6px 11px;cursor:pointer;}
+.bjd-period button.on{background:var(--text-primary);color:#fff;border-color:var(--text-primary);}
+.bjd-hint{margin-left:auto;color:var(--text-tertiary);}
+.bjd-chart{height:300px;position:relative;margin-bottom:12px;}
+.bjd-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:8px;}
+.bjd-sum > div{border:1px solid var(--border-default);border-radius:var(--radius-md);padding:9px 12px;}
+.bjd-sum > div.fc{border-style:dashed;border-color:var(--color-info-fg);}
+.bjd-sum .l{font-size:11.5px;color:var(--text-tertiary);} .bjd-sum .v{font-size:16px;font-weight:700;color:var(--text-primary);}
+.bjd-note{font-size:11.5px;color:var(--text-tertiary);margin-bottom:8px;line-height:1.5;}
+#bjd-table th.num,#bjd-table td.num{text-align:center;}
+#bjd-table tr.fc td{color:var(--color-info-fg);font-style:italic;}
 td.num{text-align:right;font-variant-numeric:tabular-nums;}
 .badge{display:inline-block;padding:2px 8px;border-radius:var(--radius-full);font-size:10.5px;font-weight:600;}
 .badge.need{background:rgba(212,47,82,.14);color:var(--color-error-fg);}
@@ -643,6 +681,45 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
           <table id="i-table"><thead><tr id="i-theadRow"></tr></thead><tbody id="i-tbody"></tbody></table>
         </div>
       </section>
+
+      <!-- [2026-10-13] 바오지 재고표 (발주서 표 양식). 위 필터·검색을 그대로 따르고, 바오지 품목이 없으면 숨깁니다. -->
+      <section class="section card" id="bj-card" style="display:none;">
+        <div class="table-head">
+          <h3>바오지 재고표</h3>
+          <span class="row-count" id="bj-rowCount"></span>
+        </div>
+        <div class="tbl-scroll">
+          <table id="bj-table"><thead><tr>
+            <th>이미지</th><th>모델</th><th>색상</th><th class="bj-col-code">상품코드</th><th class="num">사이즈</th>
+            <th class="num">누적입고수량</th><th class="num">누적판매수량</th><th class="num">현재고</th><th class="num">입고예정재고</th>
+          </tr></thead><tbody id="bj-tbody"></tbody></table>
+        </div>
+      </section>
+
+      <!-- [2026-10-13] 바오지 재고표 이미지 클릭 → 크게 보기 -->
+      <div id="bj-zoom" style="display:none;" role="dialog" aria-modal="true" aria-label="이미지 크게 보기"><img id="bj-zoomImg" alt=""><div class="cap" id="bj-zoomCap"></div></div>
+
+      <!-- [2026-10-13] 바오지 재고표 품번 클릭 → 기간별 판매 상세 -->
+      <div id="bjd-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="bjd-title">
+        <div class="bjd-box">
+          <div class="bjd-head">
+            <div class="bjd-thumb" id="bjd-thumb"></div>
+            <div class="bjd-titles"><div class="bjd-title" id="bjd-title"></div><div class="bjd-sub" id="bjd-sub"></div></div>
+            <button type="button" class="bjd-close" id="bjd-close" aria-label="닫기">✕</button>
+          </div>
+          <div class="bjd-period" id="bjd-period">
+            <span>지난 기간</span>
+            <button type="button" data-w="8">8주</button><button type="button" data-w="13">13주</button><button type="button" data-w="26">26주</button>
+            <span class="bjd-hint">예측은 다음 8주(리드타임 약 50일)</span>
+          </div>
+          <div class="bjd-chart"><canvas id="bjd-chart"></canvas></div>
+          <div class="bjd-sum" id="bjd-sum"></div>
+          <div class="bjd-note" id="bjd-note"></div>
+          <div class="tbl-scroll" style="max-height:300px;"><table id="bjd-table"><thead><tr>
+            <th>기간</th><th class="num">일반판매</th><th class="num">체험단</th><th class="num">판매 합계</th><th class="num">작년 동기</th><th class="num">입고</th><th class="num">안전재고</th><th class="num">주말 판매가능재고</th>
+          </tr></thead><tbody id="bjd-tbody"></tbody></table></div>
+        </div>
+      </div>
 
       <section class="section ai-box">
         <h3>AI에게 물어보기</h3><p class="q">지금 필터/검색된 재고상세 목록(최대 60건, 예상소진일·예상재고(60일후) 등 이미 계산된 값 포함)만 보고 답합니다.
@@ -1043,6 +1120,8 @@ function parseWorkbook(buf){
     img: r['이미지url']||'', onOrder:toNum(r['발주수량']),
     price:toNum(r['온라인판매가']), consumerPrice:toNum(r['소비자가격']),
     edp:r['EDP넘버']||'', costPrice:toNum(r['입고단가']),
+    // [2026-10-13] 바오지 재고표용. 매크로가 아직 이 두 열을 안 내보내면 빈 값으로 둡니다.
+    color:r['컬러']||'', inQty:(r['누적입고수량']===undefined||r['누적입고수량']==='')?null:toNum(r['누적입고수량']),
   }));
   state.inv.forEach(it=>{
     const dailyRate = it.last7>0 ? it.last7/7 : (it.last2m>0 ? it.last2m/60 : 0);
@@ -1055,6 +1134,11 @@ function parseWorkbook(buf){
     it.notes = computeInvNotes(it);
     it.notesText = it.notes.map(n=>n.t).join(', ');
   });
+
+  // [2026-10-13] 입고로그(선택) - 바오지 재고표 상세의 지난 기간 판매가능재고 계산용. 시트가 없으면 빈 목록.
+  const rawIn = sheetToRows(wb, '입고로그');
+  state.hasInLog = !!rawIn;
+  state.inLog = (rawIn||[]).map(r=>({date:parseDate(r['날짜']), code:String(r['상품코드']||'').trim(), qty:toNum(r['입고수량'])})).filter(x=>x.date&&x.code);
 
   const priceByCode = {}; state.inv.forEach(it=>{ if(it.code) priceByCode[it.code]=it.price||0; });
   // [2026-07-30 추가] 프로모션 상세품목(구글시트) enrichment용 - 상품코드로 상품명/브랜드/
@@ -1579,7 +1663,168 @@ function renderInvTable(){
     <td><div class="note-badges">${r.notes.map(n=>`<span class="badge ${n.c}">${n.t}</span>`).join('')}</div></td></tr>`).join('')
     || `<tr><td colspan="${ITCOLS.length}" style="text-align:center;padding:30px;color:var(--text-tertiary)">조건에 맞는 데이터가 없습니다.</td></tr>`;
   document.getElementById('i-rowCount').textContent = `${fmtNum(rows.length)}건`+(rows.length>MAX?` (상위 ${MAX}건 표시)`:'');
+  renderBjTable();
 }
+
+/* [2026-10-13] 바오지 재고표 - 발주서처럼 모델·색상별로 이미지/모델/색상 칸을 합치고 사이즈별 줄을 붙임.
+   재고 상세와 같은 필터·검색 결과 중 브랜드가 바오지인 품목만, 마스터 순서대로 보여 줍니다. */
+function renderBjTable(){
+  const card=document.getElementById('bj-card'); if(!card) return;
+  const picked=new Set(invTableRows());
+  const rows=state.inv.filter(r=>picked.has(r) && r.brand==='바오지');
+  card.style.display = rows.length ? '' : 'none';
+  if(!rows.length) return;
+  const groups=[], byKey={};
+  rows.forEach(r=>{
+    const key=r.model+'|'+r.color;
+    if(!byKey[key]){ byKey[key]={model:r.model, color:r.color, img:'', rows:[]}; groups.push(byKey[key]); }
+    const g=byKey[key]; g.rows.push(r); if(!g.img && r.img) g.img=r.img;
+  });
+  const sizeNum=v=>{const n=parseFloat(v); return isNaN(n)?Infinity:n;};
+  const esc=v=>String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  let html='';
+  groups.forEach(g=>{
+    g.rows.sort((a,b)=>sizeNum(a.size)-sizeNum(b.size));
+    const n=g.rows.length;
+    g.rows.forEach((r,i)=>{
+      html+=`<tr class="${i===0?'bj-first':''}">`+
+        (i===0?`<td rowspan="${n}" class="bj-merge bj-img">${g.img?`<img src="${escAttr(g.img)}" alt="${esc(g.model)} ${esc(g.color)}" loading="lazy">`:''}</td>`+
+               `<td rowspan="${n}" class="bj-merge bj-model">${esc(g.model)||'-'}</td>`+
+               `<td rowspan="${n}" class="bj-merge">${esc(g.color)||'-'}</td>`:'')+
+        `<td><a class="bj-code" data-code="${escAttr(r.code)}" href="#">${esc(r.code)}</a></td><td class="num">${esc(r.size)||'-'}</td>`+
+        `<td class="num">${r.inQty==null?'-':fmtNum(r.inQty)}</td><td class="num">${fmtNum(r.cumQty)}</td>`+
+        `<td class="num">${fmtNum(r.stock)}</td><td class="num">${r.onOrder>0?fmtNum(r.onOrder):'-'}</td></tr>`;
+    });
+  });
+  document.getElementById('bj-tbody').innerHTML=html;
+  document.getElementById('bj-rowCount').textContent=`모델·색상 ${fmtNum(groups.length)}개 · SKU ${fmtNum(rows.length)}건`;
+}
+
+/* [2026-10-13] 품번 클릭 → 기간별 판매 상세 (주 단위)
+   - 올해 판매 / 작년 동기 판매 = 막대, 판매가능재고 = 꺾은선, 예측(판매·재고) = 점선
+   - 지난 주의 판매가능재고 = 현재고 + 그 뒤 판매 − 그 뒤 입고 (입고로그 시트가 있을 때만 계산)
+   - 판매량 = 일반판매 + 체험단 (샘플·유투버·직원구매 등 기타출고 제외)
+   - 예측 하루 판매량 = 최근 8주 판매량 평균, 하루에 평소보다 크게 몰린 날은 평소 수준으로 잘라서 계산
+   - 안전재고 = 1.65 × 일판매 표준편차(최근 8주) × √리드타임 50일 (품절 없이 버틸 확률 약 95%) */
+const BJD = {code:null, weeks:13, FC_WEEKS:8, RATE_DAYS:56, LEAD_DAYS:50, Z:1.65};
+const DAY=86400000;
+const bjdIsSale = o => o.type==='일반판매' || o.type==='체험단';
+function bjdSafety(code, endT){
+  const from=endT-BJD.RATE_DAYS*DAY, byDay={};
+  state.ord.forEach(o=>{ if(o.code===code && o.date && bjdIsSale(o)){ const t=bjdDay(o.date).getTime(); if(t>from && t<=endT) byDay[t]=(byDay[t]||0)+o.qty; } });
+  const n=BJD.RATE_DAYS; let sum=0; Object.values(byDay).forEach(v=>sum+=v);
+  const mean=sum/n; let sq=0;
+  for(let i=0;i<n;i++){ const t=bjdDay(new Date(endT-i*DAY)).getTime(); const v=byDay[t]||0; sq+=(v-mean)*(v-mean); }
+  const sd=Math.sqrt(sq/n);
+  return Math.round(BJD.Z*sd*Math.sqrt(BJD.LEAD_DAYS));
+}
+function bjdDay(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
+function bjdMonday(d){ const x=bjdDay(d); const w=(x.getDay()+6)%7; return new Date(x.getTime()-w*DAY); }
+function bjdMD(d){ return String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function bjdForecastRate(code, today){
+  const from=today.getTime()-BJD.RATE_DAYS*DAY;
+  const byDay={};
+  state.ord.forEach(o=>{ if(o.code===code && o.date && bjdIsSale(o)){ const t=bjdDay(o.date).getTime(); if(t>from && t<=today.getTime()) byDay[t]=(byDay[t]||0)+o.qty; } });
+  const vals=Object.values(byDay).filter(v=>v>0).sort((a,b)=>a-b);
+  if(!vals.length) return {rate:0, capped:0, days:0};
+  const med=vals[Math.floor(vals.length/2)];
+  const cap=Math.max(2, med*3);
+  let capped=0; const total=vals.reduce((a,v)=>{ if(v>cap) capped++; return a+Math.min(v,cap); },0);
+  return {rate: total/BJD.RATE_DAYS, capped, days: vals.length};
+}
+function openBjDetail(code){
+  const it=state.invByCode[code]; if(!it) return;
+  BJD.code=code;
+  document.getElementById('bjd-thumb').innerHTML = it.img?`<img src="${escAttr(it.img)}" alt="">`:'';
+  document.getElementById('bjd-title').textContent = `${it.model||''} ${it.color||''}`.trim() || it.name;
+  document.getElementById('bjd-sub').textContent = `${code} · 사이즈 ${it.size||'-'} · 현재고 ${fmtNum(it.stock)} · 입고예정 ${it.onOrder>0?fmtNum(it.onOrder):'-'}`;
+  document.getElementById('bjd-overlay').style.display='flex';
+  renderBjDetail();
+}
+function closeBjDetail(){ document.getElementById('bjd-overlay').style.display='none'; destroy('bjd-chart'); BJD.code=null; }
+function renderBjDetail(){
+  const code=BJD.code, it=state.invByCode[code]; if(!it) return;
+  document.querySelectorAll('#bjd-period button').forEach(b=>b.classList.toggle('on', Number(b.dataset.w)===BJD.weeks));
+  const today=bjdDay(new Date()), thisMon=bjdMonday(today);
+  const N=BJD.weeks, F=BJD.FC_WEEKS;
+  const ords=state.ord.filter(o=>o.code===code && o.date);
+  const ins=(state.inLog||[]).filter(x=>x.code===code);
+  const firstOrd=state.ord.reduce((m,o)=>o.date&&(!m||o.date<m)?o.date:m,null);
+  const sumRange=(arr,a,b,pred)=>arr.reduce((s,x)=>{const t=x.date.getTime(); return (t>=a&&t<b&&(!pred||pred(x)))?s+x.qty:s;},0);
+  const weeks=[];
+  for(let i=N-1;i>=0;i--){
+    const s=new Date(thisMon.getTime()-i*7*DAY), e=new Date(s.getTime()+7*DAY);
+    const ly0=s.getTime()-364*DAY, ly1=e.getTime()-364*DAY;
+    const end=Math.min(e.getTime(), today.getTime()+DAY);
+    const after0=end, after1=today.getTime()+DAY;
+    const stockEnd = it.stock + sumRange(ords,after0,after1) - sumRange(ins,after0,after1);
+    weeks.push({s, e, label: i===0?'이번주':bjdMD(s),
+      normal: sumRange(ords,s.getTime(),e.getTime(),o=>o.type==='일반판매'),
+      other: sumRange(ords,s.getTime(),e.getTime(),o=>o.type==='체험단'),   // 체험단 (변수명은 그대로 둠)
+      ly: (firstOrd && ly1>firstOrd.getTime()) ? sumRange(ords,ly0,ly1,bjdIsSale) : null,
+      inQty: sumRange(ins,s.getTime(),e.getTime()),
+      safety: bjdSafety(code, Math.min(e.getTime()-DAY, today.getTime())),
+      stock: stockEnd});   // 판매가능재고는 실제 재고 흐름이라 샘플·유투버 등 모든 출고를 반영
+  }
+  const hasLog=!!state.hasInLog;
+  const fr=bjdForecastRate(code, today);
+  const fc=[]; let st=it.stock;
+  for(let k=1;k<=F;k++){ const s=new Date(thisMon.getTime()+k*7*DAY); st=Math.max(0, st-fr.rate*7); fc.push({s, label:bjdMD(s), sales:fr.rate*7, stock:st}); }
+  const labels=[...weeks.map(w=>w.label), ...fc.map(f=>f.label)];
+  const pad=a=>[...a, ...Array(F).fill(null)];
+  const lastIdx=N-1;
+  const stockPast = weeks.map((w,i)=> (hasLog || i===lastIdx) ? Math.round(w.stock) : null);
+  const stockFc = [...Array(lastIdx).fill(null), it.stock, ...fc.map(f=>Math.round(f.stock*10)/10)];
+  const salesFc = [...Array(lastIdx).fill(null), Math.round(fr.rate*7*10)/10, ...fc.map(f=>Math.round(f.sales*10)/10)];
+  const todayLine={id:'bjdToday', afterDatasetsDraw(c){ const x=c.scales.x.getPixelForValue(lastIdx); const {top,bottom}=c.chartArea; const g=c.ctx; g.save(); g.strokeStyle='rgba(17,17,17,.25)'; g.setLineDash([3,3]); g.beginPath(); g.moveTo(x,top); g.lineTo(x,bottom); g.stroke(); g.restore(); }};
+  const curSafety = weeks[lastIdx].safety;
+  const safetySeries = [...weeks.map(w=>w.safety), ...fc.map(()=>curSafety)];
+  mk('bjd-chart',{data:{labels,datasets:[
+      {type:'line',label:'안전재고',data:safetySeries,fill:'origin',backgroundColor:'rgba(28,143,138,.13)',borderColor:'rgba(28,143,138,.30)',borderWidth:1,pointRadius:0,tension:.25,yAxisID:'y2',order:6},
+      {type:'bar',label:'올해 판매량',data:pad(weeks.map(w=>w.normal+w.other)),backgroundColor:'rgba(155,93,229,.75)',borderRadius:3,yAxisID:'y',order:3},
+      {type:'bar',label:'작년 동기 판매량',data:pad(weeks.map(w=>w.ly)),backgroundColor:'rgba(128,128,0,.6)',borderRadius:3,yAxisID:'y',order:4},
+      {type:'line',label:'판매가능재고',data:pad(stockPast),borderColor:'#1C6E6A',backgroundColor:'#1C6E6A',pointRadius:2,tension:.2,spanGaps:false,yAxisID:'y2',order:1},
+      {type:'line',label:'예측 판매가능재고',data:stockFc,borderColor:'#1C6E6A',borderDash:[6,5],pointRadius:0,tension:0,yAxisID:'y2',order:1},
+      {type:'line',label:'예측 판매량',data:salesFc,borderColor:'#2E7BD6',borderDash:[6,5],pointRadius:0,tension:0,yAxisID:'y',order:2},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{position:'top',align:'end',labels:{boxWidth:11,boxHeight:11,padding:10}},
+        tooltip:{...tip,callbacks:{label:c=>c.parsed.y==null?null:` ${c.dataset.label}: ${fmtNum(Math.round(c.parsed.y*10)/10)}개`}}},
+      scales:{x:{grid:{display:false}},
+        y:{position:'left',beginAtZero:true,grid:{color:GRID},title:{display:true,text:'주간 판매량'}},
+        y2:{position:'right',beginAtZero:true,grid:{display:false},title:{display:true,text:'판매가능재고'}}}},
+    plugins:[todayLine]});
+  const pastSum=weeks.reduce((a,w)=>a+w.normal+w.other,0);
+  const outDays = fr.rate>0 ? Math.round(it.stock/fr.rate) : null;
+  const outDate = outDays!=null ? new Date(today.getTime()+outDays*DAY) : null;
+  const fmtD=d=>`${d.getFullYear()}-${bjdMD(d)}`;
+  document.getElementById('bjd-sum').innerHTML =
+    `<div><div class="l">지난 ${N}주 판매</div><div class="v">${fmtNum(pastSum)}개</div></div>`+
+    `<div class="fc"><div class="l">예측 하루 판매량</div><div class="v">${fr.rate>0?(Math.round(fr.rate*100)/100):'0'}개</div></div>`+
+    `<div class="fc"><div class="l">다음 ${F}주 예측 판매</div><div class="v">${fmtNum(Math.round(fr.rate*7*F))}개</div></div>`+
+    `<div class="fc"><div class="l">예상 품절일</div><div class="v">${outDate?fmtD(outDate)+` (${fmtNum(outDays)}일)`:'판매 없음'}</div></div>`+
+    `<div><div class="l">안전재고 (현재)</div><div class="v">${fmtNum(curSafety)}개</div></div>`;
+  const notes=[`판매량 = 일반판매 + 체험단 (샘플·유투버 등 기타출고 제외).`,
+    `예측 기준: 최근 8주(56일) 하루 평균, 그중 판매가 있던 날 ${fr.days}일${fr.capped?`(평소보다 크게 몰린 ${fr.capped}일은 평소 수준으로 잘라서 계산)`:''}. 입고예정은 예측에 넣지 않았습니다.`,
+    `안전재고 = 1.65 × 최근 8주 일판매 표준편차 × √50일(리드타임). 판매가 들쑥날쑥할수록 커집니다.`];
+  if(!hasLog) notes.push('지난 주의 판매가능재고 선은 입고로그 데이터가 있어야 그려집니다(매크로 수정본 적용 후 표시).');
+  else notes.push('지난 주의 판매가능재고 = 현재고 + 그 뒤 판매 − 그 뒤 입고(입고입력 반영완료 기준). 월마감으로 옮겨진 입고는 빠질 수 있습니다.');
+  if(weeks.every(w=>w.ly==null)) notes.push(`작년 동기 판매는 주문 기록이 ${firstOrd?fmtD(firstOrd):'-'}부터라 아직 비교할 수 없습니다.`);
+  document.getElementById('bjd-note').textContent=notes.join(' ');
+  document.getElementById('bjd-tbody').innerHTML =
+    fc.slice().reverse().map(f=>`<tr class="fc"><td>${bjdMD(f.s)} ~ ${bjdMD(new Date(f.s.getTime()+6*DAY))} (예측)</td><td class="num">-</td><td class="num">-</td><td class="num">${Math.round(f.sales*10)/10}</td><td class="num">-</td><td class="num">-</td><td class="num">${fmtNum(curSafety)}</td><td class="num">${Math.round(f.stock)}</td></tr>`).join('')+
+    weeks.slice().reverse().map(w=>`<tr><td>${bjdMD(w.s)} ~ ${bjdMD(new Date(w.e.getTime()-DAY))}${w.label==='이번주'?' (이번주)':''}</td><td class="num">${fmtNum(w.normal)}</td><td class="num">${w.other?fmtNum(w.other):'-'}</td><td class="num">${fmtNum(w.normal+w.other)}</td><td class="num">${w.ly==null?'-':fmtNum(w.ly)}</td><td class="num">${w.inQty?fmtNum(w.inQty):'-'}</td><td class="num">${fmtNum(w.safety)}</td><td class="num">${(hasLog||w.label==='이번주')?fmtNum(Math.round(w.stock)):'-'}</td></tr>`).join('');
+}
+document.getElementById('bj-tbody').addEventListener('click',e=>{
+  const im=e.target.closest('td.bj-img img');
+  if(im){ document.getElementById('bj-zoomImg').src=im.src; document.getElementById('bj-zoomCap').textContent=im.alt+' · 클릭하거나 Esc로 닫기'; document.getElementById('bj-zoom').style.display='flex'; return; }
+  const a=e.target.closest('a.bj-code'); if(!a) return; e.preventDefault(); openBjDetail(a.dataset.code); });
+document.getElementById('bj-zoom').addEventListener('click',()=>{ document.getElementById('bj-zoom').style.display='none'; });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') document.getElementById('bj-zoom').style.display='none'; });
+document.getElementById('bjd-close').addEventListener('click',closeBjDetail);
+document.getElementById('bjd-overlay').addEventListener('click',e=>{ if(e.target.id==='bjd-overlay') closeBjDetail(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape' && BJD.code) closeBjDetail(); });
+document.getElementById('bjd-period').addEventListener('click',e=>{ const b=e.target.closest('button[data-w]'); if(!b) return; BJD.weeks=Number(b.dataset.w); renderBjDetail(); });
 
 ['brand','category'].forEach(k=>{
   document.getElementById('i-'+k).addEventListener('change',e=>{state.invFilters[k]=e.target.value;buildInvFilters();renderInv();});
