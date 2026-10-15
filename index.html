@@ -275,6 +275,14 @@ tbody tr.need td{background:rgba(212,47,82,.08);}
 #bj-table tbody tr:hover td.bj-merge{background:var(--bg-elevated);}
 #bj-table th.num, #bj-table td.num{text-align:center;}
 #bj-card .tbl-scroll{max-height:80vh;}
+#bj-table tr.bj-need td:not(.bj-merge){background:rgba(212,47,82,.10);}#bj-table .bj-po{color:var(--color-info-fg);font-weight:600;border-bottom:1px dotted currentColor;cursor:help;}
+#bj-poTip{position:fixed;z-index:1200;background:var(--bg-elevated);border:1px solid var(--border-strong);border-radius:var(--radius-md);box-shadow:0 6px 24px rgba(0,0,0,.14);padding:10px 12px;font-size:12px;color:var(--text-primary);pointer-events:none;max-width:460px;}
+#bj-poTip .t{font-weight:700;margin-bottom:6px;}
+#bj-poTip table{border-collapse:collapse;white-space:nowrap;font-size:12px;}
+#bj-poTip th,#bj-poTip td{padding:3px 8px;border-bottom:1px solid var(--border-default);text-align:left;}
+#bj-poTip th{color:var(--text-tertiary);font-weight:600;background:transparent;}
+#bj-poTip td.n,#bj-poTip th.n{text-align:right;}
+.bj-legend{display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(212,47,82,.10);color:var(--color-error-fg);font-weight:600;}
 #bj-table th{text-align:center;}
 #bj-table th.bj-col-code{width:1%;}
 #bj-table td.bj-img img{cursor:zoom-in;}
@@ -686,12 +694,13 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
       <section class="section card" id="bj-card" style="display:none;">
         <div class="table-head">
           <h3>바오지 재고표</h3>
+          <button class="btn-file" id="bj-exportBtn">엑셀로 내려받기</button>
           <span class="row-count" id="bj-rowCount"></span>
         </div>
         <div class="tbl-scroll">
           <table id="bj-table"><thead><tr>
             <th>이미지</th><th>모델</th><th>색상</th><th class="bj-col-code">상품코드</th><th class="num">사이즈</th>
-            <th class="num">누적입고수량</th><th class="num">누적판매수량</th><th class="num">현재고</th><th class="num">입고예정재고</th>
+            <th class="num">누적입고수량</th><th class="num">누적판매수량</th><th class="num">누적판매비율</th><th class="num">현재고</th><th class="num">입고예정수량</th>
           </tr></thead><tbody id="bj-tbody"></tbody></table>
         </div>
       </section>
@@ -1139,6 +1148,19 @@ function parseWorkbook(buf){
   const rawIn = sheetToRows(wb, '입고로그');
   state.hasInLog = !!rawIn;
   state.inLog = (rawIn||[]).map(r=>({date:parseDate(r['날짜']), code:String(r['상품코드']||'').trim(), qty:toNum(r['입고수량'])})).filter(x=>x.date&&x.code);
+  // [2026-10-15] 입고예정(선택) - 상태가 입고완료·취소가 아닌 줄만 상품코드별로 합산
+  const rawPo = sheetToRows(wb, '입고예정');
+  state.hasPoSheet = !!rawPo;
+  state.poOpen = {}; state.poLines = {};
+  (rawPo||[]).forEach(r=>{
+    const code=String(r['상품코드']||'').trim(); const st=String(r['상태']||'').trim();
+    if(!code || st==='입고완료' || st==='취소') return;
+    const qty=toNum(r['발주수량']);
+    state.poOpen[code]=(state.poOpen[code]||0)+qty;
+    // 같은 품목이 2차·3차로 나눠 들어올 수 있어서 줄마다 따로 보관 (마우스 오버 표시용)
+    (state.poLines[code]=state.poLines[code]||[]).push({qty, date:parseDate(r['입고예정일']), status:st, note:String(r['비고']||'').trim(), poNo:String(r['발주번호']||'').trim()});
+  });
+  Object.values(state.poLines).forEach(a=>a.sort((x,y)=>(x.date?x.date.getTime():Infinity)-(y.date?y.date.getTime():Infinity)));
 
   const priceByCode = {}; state.inv.forEach(it=>{ if(it.code) priceByCode[it.code]=it.price||0; });
   // [2026-07-30 추가] 프로모션 상세품목(구글시트) enrichment용 - 상품코드로 상품명/브랜드/
@@ -1682,23 +1704,39 @@ function renderBjTable(){
   });
   const sizeNum=v=>{const n=parseFloat(v); return isNaN(n)?Infinity:n;};
   const esc=v=>String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  // [2026-10-15] 발주필요 = (현재고 + 입고예정수량) < 예측 하루 판매량 × (리드타임 50일 + 여유 50일)
+  const today=bjdDay(new Date());
+  const poQty=r=>(state.poOpen&&state.poOpen[r.code])||0;
+  let needCnt=0;
   let html='';
+  const exportRows=[];   // [2026-10-15] 엑셀 내려받기용 - 화면에 보이는 순서·조건 그대로
   groups.forEach(g=>{
     g.rows.sort((a,b)=>sizeNum(a.size)-sizeNum(b.size));
     const n=g.rows.length;
+    const gSold=g.rows.reduce((a,r)=>a+(r.cumQty||0),0);
     g.rows.forEach((r,i)=>{
-      html+=`<tr class="${i===0?'bj-first':''}">`+
+      const rate=bjdForecastRate(r.code, today).rate;
+      const need=rate>0 && (r.stock+poQty(r)) < rate*BJ_COVER_DAYS;
+      if(need) needCnt++;
+      const ratio=gSold>0 ? Math.round(r.cumQty/gSold*1000)/10+'%' : '-';
+      exportRows.push({model:g.model, color:g.color, code:r.code, size:r.size, inQty:r.inQty, sold:r.cumQty,
+        ratio: gSold>0 ? r.cumQty/gSold : null, stock:r.stock, po:poQty(r), need});
+      const tip=rate>0?` title="예측 하루 ${Math.round(rate*100)/100}개 × ${BJ_COVER_DAYS}일 = ${Math.round(rate*BJ_COVER_DAYS)}개 필요 / 현재고+입고예정 ${r.stock+poQty(r)}개"`:'';
+      html+=`<tr class="${i===0?'bj-first':''}${need?' bj-need':''}"${tip}>`+
         (i===0?`<td rowspan="${n}" class="bj-merge bj-img">${g.img?`<img src="${escAttr(g.img)}" alt="${esc(g.model)} ${esc(g.color)}" loading="lazy">`:''}</td>`+
                `<td rowspan="${n}" class="bj-merge bj-model">${esc(g.model)||'-'}</td>`+
                `<td rowspan="${n}" class="bj-merge">${esc(g.color)||'-'}</td>`:'')+
         `<td><a class="bj-code" data-code="${escAttr(r.code)}" href="#">${esc(r.code)}</a></td><td class="num">${esc(r.size)||'-'}</td>`+
-        `<td class="num">${r.inQty==null?'-':fmtNum(r.inQty)}</td><td class="num">${fmtNum(r.cumQty)}</td>`+
-        `<td class="num">${fmtNum(r.stock)}</td><td class="num">${r.onOrder>0?fmtNum(r.onOrder):'-'}</td></tr>`;
+        `<td class="num">${r.inQty==null?'-':fmtNum(r.inQty)}</td><td class="num">${fmtNum(r.cumQty)}</td><td class="num">${ratio}</td>`+
+        `<td class="num">${fmtNum(r.stock)}</td>`+
+        `<td class="num">${poQty(r)>0?`<span class="bj-po" data-code="${escAttr(r.code)}">${fmtNum(poQty(r))}</span>`:'-'}</td></tr>`;
     });
   });
   document.getElementById('bj-tbody').innerHTML=html;
-  document.getElementById('bj-rowCount').textContent=`모델·색상 ${fmtNum(groups.length)}개 · SKU ${fmtNum(rows.length)}건`;
+  state.bjExportRows=exportRows;
+  document.getElementById('bj-rowCount').innerHTML=`<span class="bj-legend">발주필요 ${fmtNum(needCnt)}건 · 현재고+입고예정수량이 ${BJ_COVER_DAYS}일(리드타임 50일 + 여유 50일) 판매 예상보다 적음</span> · 모델·색상 ${fmtNum(groups.length)}개 · SKU ${fmtNum(rows.length)}건`;
 }
+const BJ_COVER_DAYS = 100;   // [2026-10-15] 리드타임 약 50일 + 판매 안전재고 여유 50일
 
 /* [2026-10-13] 품번 클릭 → 기간별 판매 상세 (주 단위)
    - 올해 판매 / 작년 동기 판매 = 막대, 판매가능재고 = 꺾은선, 예측(판매·재고) = 점선
@@ -1737,7 +1775,8 @@ function openBjDetail(code){
   BJD.code=code;
   document.getElementById('bjd-thumb').innerHTML = it.img?`<img src="${escAttr(it.img)}" alt="">`:'';
   document.getElementById('bjd-title').textContent = `${it.model||''} ${it.color||''}`.trim() || it.name;
-  document.getElementById('bjd-sub').textContent = `${code} · 사이즈 ${it.size||'-'} · 현재고 ${fmtNum(it.stock)} · 입고예정 ${it.onOrder>0?fmtNum(it.onOrder):'-'}`;
+  const po=(state.poOpen&&state.poOpen[code])||0;
+  document.getElementById('bjd-sub').textContent = `${code} · 사이즈 ${it.size||'-'} · 현재고 ${fmtNum(it.stock)} · 입고예정수량 ${po>0?fmtNum(po):'-'}`;
   document.getElementById('bjd-overlay').style.display='flex';
   renderBjDetail();
 }
@@ -1820,6 +1859,47 @@ document.getElementById('bj-tbody').addEventListener('click',e=>{
   if(im){ document.getElementById('bj-zoomImg').src=im.src; document.getElementById('bj-zoomCap').textContent=im.alt+' · 클릭하거나 Esc로 닫기'; document.getElementById('bj-zoom').style.display='flex'; return; }
   const a=e.target.closest('a.bj-code'); if(!a) return; e.preventDefault(); openBjDetail(a.dataset.code); });
 document.getElementById('bj-zoom').addEventListener('click',()=>{ document.getElementById('bj-zoom').style.display='none'; });
+
+/* [2026-10-15] 바오지 재고표 엑셀 내려받기 - 화면과 같은 필터·순서. 입고예정은 차수별 내역을 한 칸에 적음 */
+document.getElementById('bj-exportBtn').addEventListener('click',()=>{
+  const rows=state.bjExportRows||[];
+  const fd=d=>d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'날짜 미정';
+  const header=['모델','색상','상품코드','사이즈','누적입고수량','누적판매수량','누적판매비율','현재고','입고예정수량','입고예정 상세(차수·예정일·수량·상태·비고)','발주필요'];
+  const data=rows.map(r=>{
+    const lines=(state.poLines&&state.poLines[r.code])||[];
+    const detail=lines.map((l,i)=>`${i+1}차 ${fd(l.date)} ${l.qty}개 ${l.status||''}${l.note?' ('+l.note+')':''}`.trim()).join(' / ');
+    return [r.model, r.color, r.code, r.size, r.inQty, r.sold, r.ratio, r.stock, r.po||null, detail, r.need?'발주필요':''];
+  });
+  const ws=XLSX.utils.aoa_to_sheet([header,...data]);
+  for(let i=0;i<data.length;i++){ const c=ws[XLSX.utils.encode_cell({r:i+1,c:6})]; if(c && typeof c.v==='number') c.z='0.0%'; }
+  ws['!cols']=[{wch:12},{wch:10},{wch:22},{wch:7},{wch:11},{wch:11},{wch:11},{wch:8},{wch:11},{wch:48},{wch:9}];
+  ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:data.length,c:header.length-1}})};
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'바오지재고표');
+  const now=new Date();
+  const ymd=now.getFullYear()+String(now.getMonth()+1).padStart(2,'0')+String(now.getDate()).padStart(2,'0');
+  XLSX.writeFile(wb, `바오지재고표_${ymd}.xlsx`);
+});
+
+/* [2026-10-15] 입고예정수량 마우스 오버 → 차수별 입고예정일·수량·상태·비고 */
+const bjPoTip=document.createElement('div'); bjPoTip.id='bj-poTip'; bjPoTip.style.display='none'; document.body.appendChild(bjPoTip);
+document.getElementById('bj-tbody').addEventListener('mouseover',e=>{
+  const s=e.target.closest('.bj-po'); if(!s) return;
+  const lines=(state.poLines&&state.poLines[s.dataset.code])||[];
+  const esc=v=>String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const fd=d=>d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'날짜 미정';
+  bjPoTip.innerHTML=`<div class="t">${esc(s.dataset.code)} 입고예정</div>`+
+    `<table><thead><tr><th>차수</th><th>입고예정일</th><th class="n">수량</th><th>상태</th><th>비고</th></tr></thead><tbody>`+
+    lines.map((l,i)=>`<tr><td>${i+1}차</td><td>${fd(l.date)}</td><td class="n">${fmtNum(l.qty)}</td><td>${esc(l.status)||'-'}</td><td>${esc(l.note)||'-'}</td></tr>`).join('')+
+    `</tbody></table>`;
+  bjPoTip.style.display='block';
+  const r=s.getBoundingClientRect(), w=bjPoTip.offsetWidth, h=bjPoTip.offsetHeight;
+  let left=r.left-w-10, top=r.top-8;
+  if(left<8) left=Math.min(r.right+10, window.innerWidth-w-8);
+  if(top+h>window.innerHeight-8) top=window.innerHeight-h-8;
+  bjPoTip.style.left=Math.max(8,left)+'px'; bjPoTip.style.top=Math.max(8,top)+'px';
+});
+document.getElementById('bj-tbody').addEventListener('mouseout',e=>{ if(e.target.closest('.bj-po')) bjPoTip.style.display='none'; });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') document.getElementById('bj-zoom').style.display='none'; });
 document.getElementById('bjd-close').addEventListener('click',closeBjDetail);
 document.getElementById('bjd-overlay').addEventListener('click',e=>{ if(e.target.id==='bjd-overlay') closeBjDetail(); });
