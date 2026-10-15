@@ -1173,7 +1173,8 @@ function parseWorkbook(buf){
   // 있는 계정인지"를 자동 판별함. 관리자 계정은 매출 기준 고정, 표시제한 계정은 수량 기준 고정
   // (사용자가 매번 토글할 필요 없이 계정에 따라 자동으로 정해짐).
   state.hasPrice = state.inv.some(it=>it.price>0);
-  state.ordMetric = state.hasPrice ? 'amount' : 'qty';
+  // [2026-10-15] 판매가가 비어 있는 SKU가 많아 금액 기준이면 그래프가 비는 문제 → 모든 계정 수량 기준(사용자 요청)
+  state.ordMetric = 'qty';
   const badgeEl = document.getElementById('restrictedBadge');
   if(badgeEl) badgeEl.style.display = state.hasPrice ? 'none' : 'inline-block';
 
