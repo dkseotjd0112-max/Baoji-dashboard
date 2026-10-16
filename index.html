@@ -270,6 +270,20 @@ tbody tr.need td{background:rgba(212,47,82,.08);}
 #bj-table td.bj-merge{vertical-align:middle;text-align:center;border-right:1px solid var(--border-default);background:var(--bg-elevated);}
 #bj-table td.bj-img{width:120px;padding:6px;}
 #bj-table td.bj-img img{width:104px;height:auto;display:block;margin:0 auto;border-radius:6px;}
+/* [2026-10-16] 신발 부분이 크게 보이도록 위아래 여백을 잘라 가로로 긴 틀에 채우고 조금 확대 */
+#bj-table td.bj-img .bj-crop{width:168px;height:98px;margin:0 auto;overflow:hidden;border-radius:6px;background:#fff;}
+/* [2026-10-16] 이미지 칸 넓힘(120→152px), 모델 칸은 내용 폭만큼만, 글씨 1pt 작게(본문 12.5→11.5px, 머리글 11.5→10.5px) */
+#bj-table td.bj-img{width:180px;}   /* [2026-10-16] 가로로 더 넓힘: 썸네일 140→168px */
+#bj-table thead th{line-height:1.25;vertical-align:middle;}   /* 긴 항목명은 두 줄로 */
+#bj-table thead th.num, #bj-table tbody td.num{padding-left:8px;padding-right:8px;}   /* 숫자 칸 좌우 여백 12→8px */
+#bj-table th.bj-col-model, #bj-table td.bj-model{width:1%;padding-left:10px;padding-right:10px;}
+#bj-table{font-size:11.5px;}
+#bj-table thead th{font-size:10.5px;}
+/* [2026-10-16] SKU 행 높이 1mm(약 4px) 줄임: 위아래 여백 9px → 7px */
+#bj-table tbody td{padding-top:7px;padding-bottom:7px;}
+#bj-table .bj-eu{font-size:9.5px;color:var(--text-tertiary);margin-left:2px;}
+#bj-table td.bj-img .bj-crop img{width:100%;height:100%;object-fit:cover;transform:scale(1.18);border-radius:0;}
+#bj-table td.bj-needqty{color:var(--color-error-fg);font-weight:700;}
 #bj-table td.bj-model{font-weight:700;}
 #bj-table tr.bj-first td{border-top:2px solid var(--border-strong);}
 #bj-table tbody tr:hover td.bj-merge{background:var(--bg-elevated);}
@@ -699,8 +713,8 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
         </div>
         <div class="tbl-scroll">
           <table id="bj-table"><thead><tr>
-            <th>이미지</th><th>모델</th><th>색상</th><th class="bj-col-code">상품코드</th><th class="num">사이즈</th>
-            <th class="num">누적입고수량</th><th class="num">누적판매수량</th><th class="num">누적판매비율</th><th class="num">현재고</th><th class="num">입고예정수량</th>
+            <th>이미지</th><th class="bj-col-model">모델</th><th>색상</th><th class="bj-col-code">상품코드</th><th class="num">사이즈</th>
+            <th class="num">누적<br>입고수량</th><th class="num">누적<br>판매수량</th><th class="num">누적<br>판매비율</th><th class="num">현재고</th><th class="num">발주<br>필요수량</th><th class="num">입고<br>예정수량</th>
           </tr></thead><tbody id="bj-tbody"></tbody></table>
         </div>
       </section>
@@ -1719,17 +1733,20 @@ function renderBjTable(){
       const rate=bjdForecastRate(r.code, today).rate;
       const need=rate>0 && (r.stock+poQty(r)) < rate*BJ_COVER_DAYS;
       if(need) needCnt++;
+      // [2026-10-16] 발주필요수량 = 100일 판매 예상 − (현재고 + 입고예정수량), 올림
+      const needQty = need ? Math.ceil(rate*BJ_COVER_DAYS - (r.stock+poQty(r))) : 0;
       const ratio=gSold>0 ? Math.round(r.cumQty/gSold*1000)/10+'%' : '-';
       exportRows.push({model:g.model, color:g.color, code:r.code, size:r.size, inQty:r.inQty, sold:r.cumQty,
-        ratio: gSold>0 ? r.cumQty/gSold : null, stock:r.stock, po:poQty(r), need});
+        ratio: gSold>0 ? r.cumQty/gSold : null, stock:r.stock, needQty, po:poQty(r), need});
       const tip=rate>0?` title="예측 하루 ${Math.round(rate*100)/100}개 × ${BJ_COVER_DAYS}일 = ${Math.round(rate*BJ_COVER_DAYS)}개 필요 / 현재고+입고예정 ${r.stock+poQty(r)}개"`:'';
       html+=`<tr class="${i===0?'bj-first':''}${need?' bj-need':''}"${tip}>`+
-        (i===0?`<td rowspan="${n}" class="bj-merge bj-img">${g.img?`<img src="${escAttr(g.img)}" alt="${esc(g.model)} ${esc(g.color)}" loading="lazy">`:''}</td>`+
+        (i===0?`<td rowspan="${n}" class="bj-merge bj-img">${g.img?`<div class="bj-crop"><img src="${escAttr(g.img)}" alt="${esc(g.model)} ${esc(g.color)}" loading="lazy"></div>`:''}</td>`+
                `<td rowspan="${n}" class="bj-merge bj-model">${esc(g.model)||'-'}</td>`+
                `<td rowspan="${n}" class="bj-merge">${esc(g.color)||'-'}</td>`:'')+
-        `<td><a class="bj-code" data-code="${escAttr(r.code)}" href="#">${esc(r.code)}</a></td><td class="num">${esc(r.size)||'-'}</td>`+
+        `<td><a class="bj-code" data-code="${escAttr(r.code)}" href="#">${esc(r.code)}</a></td><td class="num">${esc(r.size)||'-'}${BJ_EU[String(r.size).trim()]?`<span class="bj-eu">(${BJ_EU[String(r.size).trim()]})</span>`:''}</td>`+
         `<td class="num">${r.inQty==null?'-':fmtNum(r.inQty)}</td><td class="num">${fmtNum(r.cumQty)}</td><td class="num">${ratio}</td>`+
         `<td class="num">${fmtNum(r.stock)}</td>`+
+        `<td class="num${needQty>0?' bj-needqty':''}">${needQty>0?fmtNum(needQty):'-'}</td>`+
         `<td class="num">${poQty(r)>0?`<span class="bj-po" data-code="${escAttr(r.code)}">${fmtNum(poQty(r))}</span>`:'-'}</td></tr>`;
     });
   });
@@ -1738,6 +1755,8 @@ function renderBjTable(){
   document.getElementById('bj-rowCount').innerHTML=`<span class="bj-legend">발주필요 ${fmtNum(needCnt)}건 · 현재고+입고예정수량이 ${BJ_COVER_DAYS}일(리드타임 50일 + 여유 50일) 판매 예상보다 적음</span> · 모델·색상 ${fmtNum(groups.length)}개 · SKU ${fmtNum(rows.length)}건`;
 }
 const BJ_COVER_DAYS = 100;   // [2026-10-15] 리드타임 약 50일 + 판매 안전재고 여유 50일
+// [2026-10-16] 바오지 사이즈표: 한국 사이즈(mm) → EU 사이즈. 여성 235~255 = 37~41, 남성 260~280 = 41~45
+const BJ_EU = {'235':37,'240':38,'245':39,'250':40,'255':41,'260':41,'265':42,'270':43,'275':44,'280':45};
 
 /* [2026-10-13] 품번 클릭 → 기간별 판매 상세 (주 단위)
    - 올해 판매 / 작년 동기 판매 = 막대, 판매가능재고 = 꺾은선, 예측(판매·재고) = 점선
@@ -1865,15 +1884,15 @@ document.getElementById('bj-zoom').addEventListener('click',()=>{ document.getEl
 document.getElementById('bj-exportBtn').addEventListener('click',()=>{
   const rows=state.bjExportRows||[];
   const fd=d=>d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'날짜 미정';
-  const header=['모델','색상','상품코드','사이즈','누적입고수량','누적판매수량','누적판매비율','현재고','입고예정수량','입고예정 상세(차수·예정일·수량·상태·비고)','발주필요'];
+  const header=['모델','색상','상품코드','사이즈','누적입고수량','누적판매수량','누적판매비율','현재고','발주필요수량','입고예정수량','입고예정 상세(차수·예정일·수량·상태·비고)','발주필요'];
   const data=rows.map(r=>{
     const lines=(state.poLines&&state.poLines[r.code])||[];
     const detail=lines.map((l,i)=>`${i+1}차 ${fd(l.date)} ${l.qty}개 ${l.status||''}${l.note?' ('+l.note+')':''}`.trim()).join(' / ');
-    return [r.model, r.color, r.code, r.size, r.inQty, r.sold, r.ratio, r.stock, r.po||null, detail, r.need?'발주필요':''];
+    return [r.model, r.color, r.code, r.size, r.inQty, r.sold, r.ratio, r.stock, r.needQty||null, r.po||null, detail, r.need?'발주필요':''];
   });
   const ws=XLSX.utils.aoa_to_sheet([header,...data]);
   for(let i=0;i<data.length;i++){ const c=ws[XLSX.utils.encode_cell({r:i+1,c:6})]; if(c && typeof c.v==='number') c.z='0.0%'; }
-  ws['!cols']=[{wch:12},{wch:10},{wch:22},{wch:7},{wch:11},{wch:11},{wch:11},{wch:8},{wch:11},{wch:48},{wch:9}];
+  ws['!cols']=[{wch:12},{wch:10},{wch:22},{wch:7},{wch:11},{wch:11},{wch:11},{wch:8},{wch:11},{wch:11},{wch:48},{wch:9}];
   ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:data.length,c:header.length-1}})};
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'바오지재고표');
