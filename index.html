@@ -284,7 +284,12 @@ tbody tr.need td{background:rgba(212,47,82,.08);}
 #bj-table .bj-eu{font-size:9.5px;color:var(--text-tertiary);margin-left:2px;}
 /* [2026-10-16] 선명도: transform:scale(1.18) 확대는 흐릿하게 그려져서, 같은 범위를 크기·위치로 잘라 그림 */
 #bj-table td.bj-img .bj-crop{position:relative;}
-#bj-table td.bj-img .bj-crop img{position:absolute;left:-9%;top:-9%;width:118%;height:118%;max-width:none;object-fit:cover;border-radius:0;image-rendering:-webkit-optimize-contrast;}
+#bj-table td.bj-img .bj-crop img{position:absolute;left:-9%;top:-9%;width:118%;height:118%;max-width:none;object-fit:cover;border-radius:0;}
+/* [2026-10-16] 칸 키움 168×98 → 220×128 + 고품질 축소(캔버스). 행 높이는 그대로, 이미지 열만 넓어짐 */
+#bj-table td.bj-img{width:232px;}
+#bj-table td.bj-img .bj-crop{width:220px;height:128px;}
+#bj-table td.bj-img .bj-crop canvas{position:absolute;left:-9%;top:-9%;width:118%;height:118%;cursor:zoom-in;}
+#bj-table td.bj-img .bj-crop.hq img{opacity:0;}
 #bj-table td.bj-needqty{color:var(--color-error-fg);font-weight:700;}
 #bj-table td.bj-model{font-weight:700;}
 #bj-table tr.bj-first td{border-top:2px solid var(--border-strong);}
@@ -1740,6 +1745,35 @@ function renderInvTable(){
 
 /* [2026-10-13] 바오지 재고표 - 발주서처럼 모델·색상별로 이미지/모델/색상 칸을 합치고 사이즈별 줄을 붙임.
    재고 상세와 같은 필터·검색 결과 중 브랜드가 바오지인 품목만, 마스터 순서대로 보여 줍니다. */
+/* [2026-10-16] 재고표 썸네일 고품질 축소: 원본(약 1500px)을 칸 크기에 맞춰 한 번에 곱게 줄여 캔버스에 그림.
+   브라우저가 큰 사진을 작은 칸에 바로 줄이면 흐리거나 거칠게 보여서. 실패하면 원래 <img>가 그대로 보임 */
+function bjHqThumbs(){
+  document.querySelectorAll('#bj-tbody .bj-crop').forEach(box=>{
+    const img=box.querySelector('img'); if(!img || box.dataset.hq) return;
+    box.dataset.hq='1';
+    const draw=async()=>{
+      try{
+        const dpr=Math.max(1, window.devicePixelRatio||1);
+        const W=Math.round(220*1.18*dpr), H=Math.round(128*1.18*dpr);   // 칸 크기(CSS .bj-crop)와 같게. 탭이 숨겨져 있어도 계산되도록 고정값
+        const nw=img.naturalWidth, nh=img.naturalHeight; if(!nw||!nh||!W||!H) return;
+        const s=Math.max(W/nw, H/nh), sw=W/s, sh=H/s;   // object-fit:cover 와 같은 자르기
+        // 반씩 여러 번 나눠 줄임(1500→750→375→목표). 한 번에 7배 줄이면 계단 현상(짜글짜글)이 생김
+        let src=img, sx=(nw-sw)/2, sy=(nh-sh)/2, cw=sw, ch=sh;
+        while(cw/2 >= W && ch/2 >= H){
+          const t=document.createElement('canvas'); t.width=Math.round(cw/2); t.height=Math.round(ch/2);
+          const tc=t.getContext('2d'); tc.imageSmoothingEnabled=true; tc.imageSmoothingQuality='high';
+          tc.drawImage(src, sx, sy, cw, ch, 0, 0, t.width, t.height);
+          src=t; sx=0; sy=0; cw=t.width; ch=t.height;
+        }
+        const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+        const c2=cv.getContext('2d'); c2.imageSmoothingEnabled=true; c2.imageSmoothingQuality='high';
+        c2.drawImage(src, sx, sy, cw, ch, 0, 0, W, H);
+        box.appendChild(cv); box.classList.add('hq');
+      }catch(e){}
+    };
+    if(img.complete && img.naturalWidth) draw(); else img.addEventListener('load', draw, {once:true});
+  });
+}
 function renderBjTable(){
   const card=document.getElementById('bj-card'); if(!card) return;
   const picked=new Set(invTableRows());
@@ -1802,6 +1836,7 @@ function renderBjTable(){
     });
   });
   document.getElementById('bj-tbody').innerHTML=html;
+  bjHqThumbs();
   state.bjExportRows=exportRows;
   document.getElementById('bj-rowCount').innerHTML=
     // [2026-10-16] 쉬운 문구: 색마다 "지금 발주하면 어떻게 되는지"로 설명. 건수는 색별로 따로(분홍 = 발주필요 중 긴급 제외)
@@ -2010,7 +2045,7 @@ document.getElementById('bjd-tbody').addEventListener('click',e=>{
   tr.after(sub);
 });
 document.getElementById('bj-tbody').addEventListener('click',e=>{
-  const im=e.target.closest('td.bj-img img');
+  const imCell=e.target.closest('td.bj-img'); const im=imCell && imCell.querySelector('img');
   if(im){ document.getElementById('bj-zoomImg').src=im.src; document.getElementById('bj-zoomCap').textContent=im.alt+' · 클릭하거나 Esc로 닫기'; document.getElementById('bj-zoom').style.display='flex'; return; }
   const a=e.target.closest('a.bj-code'); if(!a) return; e.preventDefault(); openBjDetail(a.dataset.code); });
 document.getElementById('bj-zoom').addEventListener('click',()=>{ document.getElementById('bj-zoom').style.display='none'; });
