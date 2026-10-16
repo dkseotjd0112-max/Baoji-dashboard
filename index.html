@@ -297,7 +297,28 @@ tbody tr.need td{background:rgba(212,47,82,.08);}
 #bj-poTip th{color:var(--text-tertiary);font-weight:600;background:transparent;}
 #bj-poTip td.n,#bj-poTip th.n{text-align:right;}
 .bj-legend{display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(212,47,82,.10);color:var(--color-error-fg);font-weight:600;}
+/* [2026-10-16] 긴급: 보유가 리드타임 50일치 미만 */
+.bj-legend.bj-legend-urgent{background:var(--color-error-fg);color:#fff;}
+.bj-legend-note{margin-left:6px;font-size:11px;color:var(--text-tertiary);}
+#bj-table tr.bj-urgent td:not(.bj-merge){background:rgba(212,47,82,.24);}
+/* [2026-10-16] 발주검토: 곧 발주필요가 될 품목 (연한 노랑) */
+#bj-table tr.bj-review td:not(.bj-merge){background:rgba(217,138,30,.12);}
+#bj-table td.bj-reviewqty{color:var(--color-warning-fg);font-weight:700;}
+.bj-legend.bj-legend-review{background:rgba(217,138,30,.14);color:var(--color-warning-fg);}
+.bj-review-ctl{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--text-secondary);font-weight:600;}
+.bj-review-ctl input{width:52px;padding:4px 6px;border:1px solid var(--border-strong);border-radius:6px;font:inherit;text-align:center;}
+#bj-table .bj-urgent-tag{display:inline-block;font-size:9.5px;font-weight:700;color:#fff;background:var(--color-error-fg);border-radius:3px;padding:0 4px;margin-right:4px;vertical-align:1px;}
 #bj-table th{text-align:center;}
+/* [2026-10-16] 단종·공급불가: 회색 줄 + 태그, 발주 판단 제외 */
+#bj-table tr.bj-stop td:not(.bj-merge){background:rgba(17,17,17,.05);color:var(--text-tertiary);}
+#bj-table .bj-stop-tag{display:inline-block;font-size:9.5px;font-weight:700;color:#fff;background:#8a8a8a;border-radius:3px;padding:0 4px;vertical-align:1px;}
+.bj-legend.bj-legend-stop{background:rgba(17,17,17,.07);color:var(--text-secondary);}
+/* [2026-10-16] 상세 주간표: 판매 숫자 클릭 → 그 주 판매 내역 */
+#bjd-table a.bjd-sl{color:var(--color-info-fg);text-decoration:underline;text-underline-offset:2px;cursor:pointer;}
+#bjd-table tr.bjd-lines td{background:rgba(46,123,214,.05);padding:6px 10px 10px;}
+#bjd-table .bjd-lt{border-collapse:collapse;font-size:11.5px;margin:0 auto;}
+#bjd-table .bjd-lt th,#bjd-table .bjd-lt td{padding:3px 10px;border-bottom:1px solid var(--border-default);background:transparent;text-align:left;}
+#bjd-table .bjd-lt td.n,#bjd-table .bjd-lt th.n{text-align:right;}
 #bj-table th.bj-col-code{width:1%;}
 #bj-table td.bj-img img{cursor:zoom-in;}
 #bj-zoom{position:fixed;inset:0;background:rgba(17,17,17,.72);z-index:1100;display:flex;align-items:center;justify-content:center;padding:24px;cursor:zoom-out;}
@@ -709,6 +730,8 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
         <div class="table-head">
           <h3>바오지 재고표</h3>
           <button class="btn-file" id="bj-exportBtn">엑셀로 내려받기</button>
+          <label class="bj-review-ctl" for="bj-reviewDays" title="발주필요 기준(90일치)에 며칠을 더해서 '곧 발주필요가 될 품목'까지 같이 볼지. 기본 30일 = 발주주기">발주검토 +<input type="number" id="bj-reviewDays" min="0" max="60" step="5" value="30">일</label>
+          <label class="bj-review-ctl" for="bj-hideStop" title="vol5 마스터테이블 판매상태가 단종·공급불가인 SKU를 표에서 숨깁니다"><input type="checkbox" id="bj-hideStop" style="width:auto;">단종·공급불가 숨김</label>
           <span class="row-count" id="bj-rowCount"></span>
         </div>
         <div class="tbl-scroll">
@@ -1145,6 +1168,8 @@ function parseWorkbook(buf){
     edp:r['EDP넘버']||'', costPrice:toNum(r['입고단가']),
     // [2026-10-13] 바오지 재고표용. 매크로가 아직 이 두 열을 안 내보내면 빈 값으로 둡니다.
     color:r['컬러']||'', inQty:(r['누적입고수량']===undefined||r['누적입고수량']==='')?null:toNum(r['누적입고수량']),
+    // [2026-10-16] 판매상태: 단종(추가 발주 계획 없음) / 공급불가(제조사 재고 없음) → 발주 판단에서 제외. 빈 값 = 판매중
+    saleStatus: ['단종','공급불가'].includes(String(r['판매상태']||'').trim()) ? String(r['판매상태']).trim() : '',
   }));
   state.inv.forEach(it=>{
     const dailyRate = it.last7>0 ? it.last7/7 : (it.last2m>0 ? it.last2m/60 : 0);
@@ -1209,6 +1234,8 @@ function parseWorkbook(buf){
   }).filter(r=>r.date);
 
   document.getElementById('period').textContent = new Date().toLocaleString('ko-KR',{hour12:false});
+
+  applyUnifiedInv();   // [2026-10-16] 판매·발주 기준 통일
 
   // 사이드바 브랜드 목록을 먼저 만들고(전역 브랜드를 두 탭 필터에 밀어넣음) 그 다음 렌더링
   buildGlobalBrand();
@@ -1708,8 +1735,10 @@ function renderInvTable(){
 function renderBjTable(){
   const card=document.getElementById('bj-card'); if(!card) return;
   const picked=new Set(invTableRows());
-  const rows=state.inv.filter(r=>picked.has(r) && r.brand==='바오지');
-  card.style.display = rows.length ? '' : 'none';
+  const hideStop=!!(document.getElementById('bj-hideStop')||{}).checked;
+  const stopAll=state.inv.filter(r=>picked.has(r) && r.brand==='바오지' && r.saleStatus).length;
+  const rows=state.inv.filter(r=>picked.has(r) && r.brand==='바오지' && !(hideStop && r.saleStatus));
+  card.style.display = (rows.length||stopAll) ? '' : 'none';
   if(!rows.length) return;
   const groups=[], byKey={};
   rows.forEach(r=>{
@@ -1722,7 +1751,7 @@ function renderBjTable(){
   // [2026-10-15] 발주필요 = (현재고 + 입고예정수량) < 예측 하루 판매량 × (리드타임 50일 + 여유 50일)
   const today=bjdDay(new Date());
   const poQty=r=>(state.poOpen&&state.poOpen[r.code])||0;
-  let needCnt=0;
+  let needCnt=0, urgentCnt=0, reviewCnt=0, stopCnt=0;
   let html='';
   const exportRows=[];   // [2026-10-15] 엑셀 내려받기용 - 화면에 보이는 순서·조건 그대로
   groups.forEach(g=>{
@@ -1731,30 +1760,63 @@ function renderBjTable(){
     const gSold=g.rows.reduce((a,r)=>a+(r.cumQty||0),0);
     g.rows.forEach((r,i)=>{
       const rate=bjdForecastRate(r.code, today).rate;
-      const need=rate>0 && (r.stock+poQty(r)) < rate*BJ_COVER_DAYS;
+      // [2026-10-16] 보유 = 현재고 + 입고예정수량.
+      //  긴급     : 보유 < 리드타임 50일치  → 지금 발주해도 입고 전에 품절
+      //  발주필요 : 보유 < 50일 + 여유 50일 = 100일치 (발주점)
+      //  발주필요수량 = 하루 판매 × (리드타임 50 + 여유 50 + 발주주기 40 = 140일) − 보유, 반올림
+      const have=r.stock+poQty(r);
+      const stop=r.saleStatus;   // [2026-10-16] 단종·공급불가 → 긴급·발주필요·발주검토·발주필요수량 모두 제외
+      const need=!stop && rate>0 && have < rate*(BJ_LEAD_DAYS+BJ_SAFETY_DAYS);
+      const urgent=need && have < rate*BJ_LEAD_DAYS;
+      // [2026-10-16] 발주검토: 아직 100일치 이상이지만 (100 + 검토일수)일치 미만 → 곧 발주필요가 될 품목
+      const reviewDays=bjReviewDays();
+      const review=!stop && rate>0 && !need && reviewDays>0 && have < rate*(BJ_LEAD_DAYS+BJ_SAFETY_DAYS+reviewDays);
+      if(stop) stopCnt++;
       if(need) needCnt++;
-      // [2026-10-16] 발주필요수량 = 100일 판매 예상 − (현재고 + 입고예정수량), 올림
-      const needQty = need ? Math.ceil(rate*BJ_COVER_DAYS - (r.stock+poQty(r))) : 0;
+      if(urgent) urgentCnt++;
+      if(review) reviewCnt++;
+      const targetQty=rate*(BJ_LEAD_DAYS+BJ_SAFETY_DAYS+BJ_CYCLE_DAYS);
+      const needQty = (need||review) ? Math.max(0, Math.round(targetQty - have)) : 0;
       const ratio=gSold>0 ? Math.round(r.cumQty/gSold*1000)/10+'%' : '-';
       exportRows.push({model:g.model, color:g.color, code:r.code, size:r.size, inQty:r.inQty, sold:r.cumQty,
-        ratio: gSold>0 ? r.cumQty/gSold : null, stock:r.stock, needQty, po:poQty(r), need});
-      const tip=rate>0?` title="예측 하루 ${Math.round(rate*100)/100}개 × ${BJ_COVER_DAYS}일 = ${Math.round(rate*BJ_COVER_DAYS)}개 필요 / 현재고+입고예정 ${r.stock+poQty(r)}개"`:'';
-      html+=`<tr class="${i===0?'bj-first':''}${need?' bj-need':''}"${tip}>`+
+        ratio: gSold>0 ? r.cumQty/gSold : null, stock:r.stock, needQty, po:poQty(r), need, urgent, review, stop});
+      const r1=v=>Math.round(v*10)/10;
+      const tip=stop?` title="${stop==='단종'?'단종: 추가 발주 계획 없음':'공급불가: 제조사 재고 없음'} → 발주 판단 안 함 (vol5 마스터테이블 판매상태)"`:rate>0?` title="예측 하루 ${Math.round(rate*100)/100}개 · 보유(현재고+입고예정) ${have}개 = 약 ${Math.round(have/rate)}일치&#10;긴급 기준 ${BJ_LEAD_DAYS}일치 ${r1(rate*BJ_LEAD_DAYS)}개 · 발주필요 기준 ${BJ_LEAD_DAYS+BJ_SAFETY_DAYS}일치 ${r1(rate*(BJ_LEAD_DAYS+BJ_SAFETY_DAYS))}개${reviewDays>0?` · 발주검토 기준 ${BJ_LEAD_DAYS+BJ_SAFETY_DAYS+reviewDays}일치 ${r1(rate*(BJ_LEAD_DAYS+BJ_SAFETY_DAYS+reviewDays))}개`:''}&#10;발주필요수량 = ${BJ_LEAD_DAYS+BJ_SAFETY_DAYS+BJ_CYCLE_DAYS}일치 ${r1(targetQty)}개 − 보유 ${have}개${(need||review)?` = ${needQty}개`:' → 발주 불필요'}"`:` title="최근 2개월 판매 없음 → 발주 판단 안 함"`;
+      html+=`<tr class="${i===0?'bj-first':''}${need?' bj-need':''}${urgent?' bj-urgent':''}${review?' bj-review':''}${stop?' bj-stop':''}"${tip}>`+
         (i===0?`<td rowspan="${n}" class="bj-merge bj-img">${g.img?`<div class="bj-crop"><img src="${escAttr(g.img)}" alt="${esc(g.model)} ${esc(g.color)}" loading="lazy"></div>`:''}</td>`+
                `<td rowspan="${n}" class="bj-merge bj-model">${esc(g.model)||'-'}</td>`+
                `<td rowspan="${n}" class="bj-merge">${esc(g.color)||'-'}</td>`:'')+
         `<td><a class="bj-code" data-code="${escAttr(r.code)}" href="#">${esc(r.code)}</a></td><td class="num">${esc(r.size)||'-'}${BJ_EU[String(r.size).trim()]?`<span class="bj-eu">(${BJ_EU[String(r.size).trim()]})</span>`:''}</td>`+
         `<td class="num">${r.inQty==null?'-':fmtNum(r.inQty)}</td><td class="num">${fmtNum(r.cumQty)}</td><td class="num">${ratio}</td>`+
         `<td class="num">${fmtNum(r.stock)}</td>`+
-        `<td class="num${needQty>0?' bj-needqty':''}">${needQty>0?fmtNum(needQty):'-'}</td>`+
+        `<td class="num${needQty>0?(review?' bj-reviewqty':' bj-needqty'):''}">${stop?`<span class="bj-stop-tag">${stop}</span>`:''}${urgent?'<span class="bj-urgent-tag">긴급</span>':''}${needQty>0?fmtNum(needQty):'-'}</td>`+
         `<td class="num">${poQty(r)>0?`<span class="bj-po" data-code="${escAttr(r.code)}">${fmtNum(poQty(r))}</span>`:'-'}</td></tr>`;
     });
   });
   document.getElementById('bj-tbody').innerHTML=html;
   state.bjExportRows=exportRows;
-  document.getElementById('bj-rowCount').innerHTML=`<span class="bj-legend">발주필요 ${fmtNum(needCnt)}건 · 현재고+입고예정수량이 ${BJ_COVER_DAYS}일(리드타임 50일 + 여유 50일) 판매 예상보다 적음</span> · 모델·색상 ${fmtNum(groups.length)}개 · SKU ${fmtNum(rows.length)}건`;
+  document.getElementById('bj-rowCount').innerHTML=
+    // [2026-10-16] 쉬운 문구: 색마다 "지금 발주하면 어떻게 되는지"로 설명. 건수는 색별로 따로(분홍 = 발주필요 중 긴급 제외)
+    `<span class="bj-legend bj-legend-urgent" title="보유가 ${BJ_LEAD_DAYS}일치(리드타임) 미만">긴급 ${fmtNum(urgentCnt)}건 · 지금 발주해도 결품</span> `+
+    `<span class="bj-legend" title="보유가 ${BJ_LEAD_DAYS}~${BJ_LEAD_DAYS+BJ_SAFETY_DAYS}일치">발주필요 ${fmtNum(needCnt-urgentCnt)}건 · 지금 발주하면 결품 없음</span> `+
+    (bjReviewDays()>0?`<span class="bj-legend bj-legend-review" title="보유가 ${BJ_LEAD_DAYS+BJ_SAFETY_DAYS}~${BJ_LEAD_DAYS+BJ_SAFETY_DAYS+bjReviewDays()}일치">발주검토 ${fmtNum(reviewCnt)}건 · ${bjReviewDays()}일 안에 발주필요</span>`:'')+
+    `<span class="bj-legend-note">발주필요수량 = ${BJ_LEAD_DAYS+BJ_SAFETY_DAYS+BJ_CYCLE_DAYS}일치(리드타임 ${BJ_LEAD_DAYS} + 재고보유 ${BJ_SAFETY_DAYS} + 발주주기 ${BJ_CYCLE_DAYS}) − 보유(현재고+입고예정)</span>`+
+    (stopAll?` <span class="bj-legend bj-legend-stop" title="vol5 마스터테이블 판매상태가 단종·공급불가인 SKU. 발주 판단에서 뺍니다">단종·공급불가 ${fmtNum(stopAll)}건 · 발주 안 함${hideStop?' (숨김)':''}</span>`:'')+
+    ` · 모델·색상 ${fmtNum(groups.length)}개 · SKU ${fmtNum(rows.length)}건`;
 }
-const BJ_COVER_DAYS = 100;   // [2026-10-15] 리드타임 약 50일 + 판매 안전재고 여유 50일
+// [2026-10-16] 바오지 발주 기준 (사용자 확정): 리드타임 약 50일, 여유 50일, 발주주기 약 40일
+const BJ_LEAD_DAYS = 50, BJ_SAFETY_DAYS = 40, BJ_CYCLE_DAYS = 30;   // [2026-10-16 변경] 재고보유 40일, 발주주기 30일   // = BRAND_ORDER_PARAMS['바오지']
+const BJ_COVER_DAYS = BJ_LEAD_DAYS + BJ_SAFETY_DAYS;   // 발주점 100일 (다른 곳 호환용)
+// [2026-10-16] 발주검토 일수(기본 30일 = 발주주기). 표 위 입력칸에서 바꾸며, 이 브라우저에만 기억합니다.
+function bjReviewDays(){ const el=document.getElementById('bj-reviewDays'); const v=el?Number(el.value):30; return isFinite(v)&&v>=0 ? Math.min(v,60) : 30; }
+(function(){
+  const el=document.getElementById('bj-reviewDays'); if(!el) return;
+  try{ const s=localStorage.getItem('bj-reviewDays2'); if(s!==null && s!=='') el.value=s; }catch(e){}
+  el.addEventListener('change',()=>{ try{ localStorage.setItem('bj-reviewDays2', el.value); }catch(e){} renderBjTable(); });
+  const hs=document.getElementById('bj-hideStop');
+  if(hs){ try{ hs.checked=localStorage.getItem('bj-hideStop')==='1'; }catch(e){}
+    hs.addEventListener('change',()=>{ try{ localStorage.setItem('bj-hideStop', hs.checked?'1':'0'); }catch(e){} renderBjTable(); }); }
+})();
 // [2026-10-16] 바오지 사이즈표: 한국 사이즈(mm) → EU 사이즈. 여성 235~255 = 37~41, 남성 260~280 = 41~45
 const BJ_EU = {'235':37,'240':38,'245':39,'250':40,'255':41,'260':41,'265':42,'270':43,'275':44,'280':45};
 
@@ -1762,9 +1824,9 @@ const BJ_EU = {'235':37,'240':38,'245':39,'250':40,'255':41,'260':41,'265':42,'2
    - 올해 판매 / 작년 동기 판매 = 막대, 판매가능재고 = 꺾은선, 예측(판매·재고) = 점선
    - 지난 주의 판매가능재고 = 현재고 + 그 뒤 판매 − 그 뒤 입고 (입고로그 시트가 있을 때만 계산)
    - 판매량 = 일반판매 + 체험단 (샘플·유투버·직원구매 등 기타출고 제외)
-   - 예측 하루 판매량 = 최근 8주 판매량 평균, 하루에 평소보다 크게 몰린 날은 평소 수준으로 잘라서 계산
-   - 안전재고 = 1.65 × 일판매 표준편차(최근 8주) × √리드타임 50일 (품절 없이 버틸 확률 약 95%) */
-const BJD = {code:null, weeks:13, FC_WEEKS:8, RATE_DAYS:56, LEAD_DAYS:50, Z:1.65};
+   - 예측 하루 판매량 = 최근 2개월(60일, 어제까지) 판매량 ÷ 60 (단순 평균)
+   - 안전재고 = 1.65 × 일판매 표준편차(최근 2개월) × √리드타임 50일 (품절 없이 버틸 확률 약 95%) */
+const BJD = {code:null, weeks:13, FC_WEEKS:8, RATE_DAYS:60, LEAD_DAYS:50, Z:1.65};
 const DAY=86400000;
 const bjdIsSale = o => o.type==='일반판매' || o.type==='체험단';
 function bjdSafety(code, endT){
@@ -1782,13 +1844,55 @@ function bjdMD(d){ return String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.ge
 function bjdForecastRate(code, today){
   const from=today.getTime()-BJD.RATE_DAYS*DAY;
   const byDay={};
-  state.ord.forEach(o=>{ if(o.code===code && o.date && bjdIsSale(o)){ const t=bjdDay(o.date).getTime(); if(t>from && t<=today.getTime()) byDay[t]=(byDay[t]||0)+o.qty; } });
-  const vals=Object.values(byDay).filter(v=>v>0).sort((a,b)=>a-b);
+  // [2026-10-16] 오늘은 매출이 마감 후(18시 이후)에 들어오므로 제외 → 어제까지 60일
+  state.ord.forEach(o=>{ if(o.code===code && o.date && bjdIsSale(o)){ const t=bjdDay(o.date).getTime(); if(t>=from && t<today.getTime()) byDay[t]=(byDay[t]||0)+o.qty; } });
+  // [2026-10-16] 몰린 날 자르기 제거(사용자 결정) → 60일 단순 평균 = 판매수량 합 ÷ 60
+  const vals=Object.values(byDay).filter(v=>v>0);
   if(!vals.length) return {rate:0, capped:0, days:0};
-  const med=vals[Math.floor(vals.length/2)];
-  const cap=Math.max(2, med*3);
-  let capped=0; const total=vals.reduce((a,v)=>{ if(v>cap) capped++; return a+Math.min(v,cap); },0);
-  return {rate: total/BJD.RATE_DAYS, capped, days: vals.length};
+  const total=vals.reduce((a,v)=>a+v,0);
+  return {rate: total/BJD.RATE_DAYS, capped:0, days: vals.length, total};
+}
+
+/* [2026-10-16] 판매·발주 기준 통일 (사용자 확정)
+   - 판매수량 = 일반판매 + 체험단 (샘플·유투버·직원구매·CS출고 등 제외)
+   - 최근 N일 = 오늘 제외, 어제까지 N일 (매출은 당일 마감 후 들어옴)
+   - 발주필요 = 보유(현재고+입고예정수량) < 하루판매 × (리드타임+여유), 부족수량(=발주필요수량) = 하루판매 × (리드타임+여유+주기) − 보유(반올림)
+     브랜드별 값은 brandOrderParams() (바오지 50/40/30, 그 밖 7/7/14)
+   재고 상세 표·KPI·TOP10·바오지 재고표가 모두 이 값을 씁니다. (vol5 매크로가 보낸 최근7일/2개월/누적/발주필요 값은 덮어씀) */
+/* [2026-10-16] 브랜드별 발주 기준 (사용자 확정). 하루 평균 판매량 기간은 모든 브랜드 공통 직전 2개월(60일).
+   바오지: 리드타임 50 · 재고보유 40 · 주기 30일 / 그 밖의 브랜드: 리드타임 7 · 여유 7 · 주기 14일 */
+const BRAND_ORDER_PARAMS = { '바오지': {lead:50, safety:40, cycle:30} };
+const DEFAULT_ORDER_PARAMS = {lead:7, safety:7, cycle:14};
+function brandOrderParams(brand){ return BRAND_ORDER_PARAMS[String(brand||'').trim()] || DEFAULT_ORDER_PARAMS; }
+function applyUnifiedInv(){
+  const today=bjdDay(new Date()), t0=today.getTime();
+  const from7=t0-7*DAY, from60=t0-60*DAY;
+  const agg={};
+  state.ord.forEach(o=>{
+    if(!o.code || !o.date || !bjdIsSale(o)) return;
+    const t=bjdDay(o.date).getTime(); if(t>=t0) return;          // 오늘 이후 제외
+    const a=agg[o.code]||(agg[o.code]={cum:0,exp:0,d7:0,d60:0});
+    a.cum+=o.qty; if(o.type==='체험단') a.exp+=o.qty;
+    if(t>=from7) a.d7+=o.qty;
+    if(t>=from60) a.d60+=o.qty;
+  });
+  state.inv.forEach(it=>{
+    const a=agg[it.code]||{cum:0,exp:0,d7:0,d60:0};
+    it.cumQty=a.cum; it.expQty=a.exp; it.last7=a.d7; it.last2m=a.d60;
+    if(state.hasPoSheet) it.onOrder=(state.poOpen&&state.poOpen[it.code])||0;   // 입고예정 = 입고예정 시트
+    const rate=bjdForecastRate(it.code, today).rate;
+    const have=it.stock+(it.onOrder||0);
+    const P=brandOrderParams(it.brand);   // 브랜드별 리드타임·여유·주기
+    it.dailyRate=rate; it.orderParams=P;
+    it.needOrder = !it.saleStatus && rate>0 && have < rate*(P.lead+P.safety);   // 단종·공급불가는 발주 판단 제외
+    it.urgent = it.needOrder && have < rate*P.lead;
+    it.shortage = it.needOrder ? Math.max(0, Math.round(rate*(P.lead+P.safety+P.cycle) - have)) : 0;
+    it.baseStock = Math.round(rate*(P.lead+P.safety));
+    it.daysLeft = rate>0 ? Math.round(it.stock/rate) : null;
+    it.stockIn60d = Math.max(0, Math.round(it.stock + (it.onOrder||0) - rate*60));
+    it.notes = computeInvNotes(it);
+    it.notesText = it.notes.map(n=>n.t).join(', ');
+  });
 }
 function openBjDetail(code){
   const it=state.invByCode[code]; if(!it) return;
@@ -1796,7 +1900,7 @@ function openBjDetail(code){
   document.getElementById('bjd-thumb').innerHTML = it.img?`<img src="${escAttr(it.img)}" alt="">`:'';
   document.getElementById('bjd-title').textContent = `${it.model||''} ${it.color||''}`.trim() || it.name;
   const po=(state.poOpen&&state.poOpen[code])||0;
-  document.getElementById('bjd-sub').textContent = `${code} · 사이즈 ${it.size||'-'} · 현재고 ${fmtNum(it.stock)} · 입고예정수량 ${po>0?fmtNum(po):'-'}`;
+  document.getElementById('bjd-sub').textContent = `${code} · 사이즈 ${it.size||'-'} · 현재고 ${fmtNum(it.stock)} · 입고예정수량 ${po>0?fmtNum(po):'-'}${it.saleStatus?` · ${it.saleStatus} (발주 판단 제외)`:''}`;
   document.getElementById('bjd-overlay').style.display='flex';
   renderBjDetail();
 }
@@ -1822,7 +1926,7 @@ function renderBjDetail(){
       other: sumRange(ords,s.getTime(),e.getTime(),o=>o.type==='체험단'),   // 체험단 (변수명은 그대로 둠)
       ly: (firstOrd && ly1>firstOrd.getTime()) ? sumRange(ords,ly0,ly1,bjdIsSale) : null,
       inQty: sumRange(ins,s.getTime(),e.getTime()),
-      safety: bjdSafety(code, Math.min(e.getTime()-DAY, today.getTime())),
+      safety: bjdSafety(code, Math.min(e.getTime()-DAY, today.getTime()-DAY)),   // 어제까지
       stock: stockEnd});   // 판매가능재고는 실제 재고 흐름이라 샘플·유투버 등 모든 출고를 반영
   }
   const hasLog=!!state.hasInLog;
@@ -1864,16 +1968,36 @@ function renderBjDetail(){
     `<div class="fc"><div class="l">예상 품절일</div><div class="v">${outDate?fmtD(outDate)+` (${fmtNum(outDays)}일)`:'판매 없음'}</div></div>`+
     `<div><div class="l">안전재고 (현재)</div><div class="v">${fmtNum(curSafety)}개</div></div>`;
   const notes=[`판매량 = 일반판매 + 체험단 (샘플·유투버 등 기타출고 제외).`,
-    `예측 기준: 최근 8주(56일) 하루 평균, 그중 판매가 있던 날 ${fr.days}일${fr.capped?`(평소보다 크게 몰린 ${fr.capped}일은 평소 수준으로 잘라서 계산)`:''}. 입고예정은 예측에 넣지 않았습니다.`,
-    `안전재고 = 1.65 × 최근 8주 일판매 표준편차 × √50일(리드타임). 판매가 들쑥날쑥할수록 커집니다.`];
+    `예측 기준: 최근 2개월(60일, 어제까지) 판매 ${fmtNum(fr.total||0)}개 ÷ 60 = 하루 ${Math.round(fr.rate*100)/100}개 (판매가 있던 날 ${fr.days}일). 입고예정은 예측에 넣지 않았습니다.`,
+    `안전재고 = 1.65 × 최근 2개월 일판매 표준편차 × √50일(리드타임). 판매가 들쑥날쑥할수록 커집니다.`];
   if(!hasLog) notes.push('지난 주의 판매가능재고 선은 입고로그 데이터가 있어야 그려집니다(매크로 수정본 적용 후 표시).');
   else notes.push('지난 주의 판매가능재고 = 현재고 + 그 뒤 판매 − 그 뒤 입고(입고입력 반영완료 기준). 월마감으로 옮겨진 입고는 빠질 수 있습니다.');
   if(weeks.every(w=>w.ly==null)) notes.push(`작년 동기 판매는 주문 기록이 ${firstOrd?fmtD(firstOrd):'-'}부터라 아직 비교할 수 없습니다.`);
   document.getElementById('bjd-note').textContent=notes.join(' ');
   document.getElementById('bjd-tbody').innerHTML =
     fc.slice().reverse().map(f=>`<tr class="fc"><td>${bjdMD(f.s)} ~ ${bjdMD(new Date(f.s.getTime()+6*DAY))} (예측)</td><td class="num">-</td><td class="num">-</td><td class="num">${Math.round(f.sales*10)/10}</td><td class="num">-</td><td class="num">-</td><td class="num">${fmtNum(curSafety)}</td><td class="num">${Math.round(f.stock)}</td></tr>`).join('')+
-    weeks.slice().reverse().map(w=>`<tr><td>${bjdMD(w.s)} ~ ${bjdMD(new Date(w.e.getTime()-DAY))}${w.label==='이번주'?' (이번주)':''}</td><td class="num">${fmtNum(w.normal)}</td><td class="num">${w.other?fmtNum(w.other):'-'}</td><td class="num">${fmtNum(w.normal+w.other)}</td><td class="num">${w.ly==null?'-':fmtNum(w.ly)}</td><td class="num">${w.inQty?fmtNum(w.inQty):'-'}</td><td class="num">${fmtNum(w.safety)}</td><td class="num">${(hasLog||w.label==='이번주')?fmtNum(Math.round(w.stock)):'-'}</td></tr>`).join('');
+    weeks.slice().reverse().map(w=>{ const wi=weeks.indexOf(w); const sl=(v,t,show)=>v?`<a class="bjd-sl" href="#" data-w="${wi}" data-t="${t}">${fmtNum(v)}</a>`:(show?'0':'-');
+      return `<tr><td>${bjdMD(w.s)} ~ ${bjdMD(new Date(w.e.getTime()-DAY))}${w.label==='이번주'?' (이번주)':''}</td><td class="num">${sl(w.normal,'일반판매',1)}</td><td class="num">${sl(w.other,'체험단',0)}</td><td class="num">${sl(w.normal+w.other,'all',1)}</td><td class="num">${w.ly==null?'-':fmtNum(w.ly)}</td><td class="num">${w.inQty?fmtNum(w.inQty):'-'}</td><td class="num">${fmtNum(w.safety)}</td><td class="num">${(hasLog||w.label==='이번주')?fmtNum(Math.round(w.stock)):'-'}</td></tr>`; }).join('');
+  BJD.weekRows=weeks;
 }
+/* [2026-10-16] 주간표의 판매 숫자 클릭 → 그 주 판매 내역(날짜·판매처·출고유형·수량)을 바로 아래 줄에 펼침. 다시 누르면 접힘 */
+document.getElementById('bjd-tbody').addEventListener('click',e=>{
+  const a=e.target.closest('a.bjd-sl'); if(!a) return; e.preventDefault();
+  const tr=a.closest('tr'), key=a.dataset.w+'|'+a.dataset.t, nx=tr.nextElementSibling;
+  const open=nx && nx.classList.contains('bjd-lines');
+  if(open) nx.remove();
+  if(open && nx.dataset.key===key) return;
+  const w=(BJD.weekRows||[])[Number(a.dataset.w)]; if(!w) return;
+  const t=a.dataset.t;
+  const lines=state.ord.filter(o=>o.code===BJD.code && o.date && o.date>=w.s && o.date<w.e && (t==='all'?bjdIsSale(o):o.type===t))
+    .sort((x,y)=>x.date-y.date);
+  const esc=v=>String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const sub=document.createElement('tr'); sub.className='bjd-lines'; sub.dataset.key=key;
+  sub.innerHTML=`<td colspan="8"><table class="bjd-lt"><thead><tr><th>날짜</th><th>판매처</th><th>출고유형</th><th class="n">수량</th></tr></thead><tbody>`+
+    lines.map(o=>`<tr><td>${o.dateStr}</td><td>${esc(o.channel)||'-'}</td><td>${esc(o.type)}</td><td class="n">${fmtNum(o.qty)}</td></tr>`).join('')+
+    `</tbody></table></td>`;
+  tr.after(sub);
+});
 document.getElementById('bj-tbody').addEventListener('click',e=>{
   const im=e.target.closest('td.bj-img img');
   if(im){ document.getElementById('bj-zoomImg').src=im.src; document.getElementById('bj-zoomCap').textContent=im.alt+' · 클릭하거나 Esc로 닫기'; document.getElementById('bj-zoom').style.display='flex'; return; }
@@ -1888,7 +2012,7 @@ document.getElementById('bj-exportBtn').addEventListener('click',()=>{
   const data=rows.map(r=>{
     const lines=(state.poLines&&state.poLines[r.code])||[];
     const detail=lines.map((l,i)=>`${i+1}차 ${fd(l.date)} ${l.qty}개 ${l.status||''}${l.note?' ('+l.note+')':''}`.trim()).join(' / ');
-    return [r.model, r.color, r.code, r.size, r.inQty, r.sold, r.ratio, r.stock, r.needQty||null, r.po||null, detail, r.need?'발주필요':''];
+    return [r.model, r.color, r.code, r.size, r.inQty, r.sold, r.ratio, r.stock, r.needQty||null, r.po||null, detail, r.stop?r.stop:(r.urgent?'긴급':(r.need?'발주필요':(r.review?'발주검토':'')))];
   });
   const ws=XLSX.utils.aoa_to_sheet([header,...data]);
   for(let i=0;i<data.length;i++){ const c=ws[XLSX.utils.encode_cell({r:i+1,c:6})]; if(c && typeof c.v==='number') c.z='0.0%'; }
@@ -2001,9 +2125,10 @@ function computeOrdPeriodRange(){
   switch(p.preset){
     case 'today': return [today, endOfToday];
     case 'yesterday': { const s=new Date(today); s.setDate(s.getDate()-1); const e=new Date(s); e.setHours(23,59,59,999); return [s,e]; }
-    case 'last7': { const s=new Date(today); s.setDate(s.getDate()-6); return [s, endOfToday]; }
-    case 'last1m': { const s=new Date(today); s.setMonth(s.getMonth()-1); s.setDate(s.getDate()+1); return [s, endOfToday]; }
-    case 'last3m': { const s=new Date(today); s.setMonth(s.getMonth()-3); s.setDate(s.getDate()+1); return [s, endOfToday]; }
+    // [2026-10-16] 최근 N일·N개월은 오늘 제외, 어제까지 (매출은 당일 마감 후 들어옴)
+    case 'last7': { const s=new Date(today); s.setDate(s.getDate()-7); const e=new Date(today); e.setDate(e.getDate()-1); e.setHours(23,59,59,999); return [s, e]; }
+    case 'last1m': { const s=new Date(today); s.setMonth(s.getMonth()-1); const e=new Date(today); e.setDate(e.getDate()-1); e.setHours(23,59,59,999); return [s, e]; }
+    case 'last3m': { const s=new Date(today); s.setMonth(s.getMonth()-3); const e=new Date(today); e.setDate(e.getDate()-1); e.setHours(23,59,59,999); return [s, e]; }
     case 'custom': {
       const f=p.from ? new Date(p.from+'T00:00:00') : null;
       const t=p.to ? new Date(p.to+'T23:59:59') : null;
