@@ -282,7 +282,9 @@ tbody tr.need td{background:rgba(212,47,82,.08);}
 /* [2026-10-16] SKU 행 높이 1mm(약 4px) 줄임: 위아래 여백 9px → 7px */
 #bj-table tbody td{padding-top:7px;padding-bottom:7px;}
 #bj-table .bj-eu{font-size:9.5px;color:var(--text-tertiary);margin-left:2px;}
-#bj-table td.bj-img .bj-crop img{width:100%;height:100%;object-fit:cover;transform:scale(1.18);border-radius:0;}
+/* [2026-10-16] 선명도: transform:scale(1.18) 확대는 흐릿하게 그려져서, 같은 범위를 크기·위치로 잘라 그림 */
+#bj-table td.bj-img .bj-crop{position:relative;}
+#bj-table td.bj-img .bj-crop img{position:absolute;left:-9%;top:-9%;width:118%;height:118%;max-width:none;object-fit:cover;border-radius:0;image-rendering:-webkit-optimize-contrast;}
 #bj-table td.bj-needqty{color:var(--color-error-fg);font-weight:700;}
 #bj-table td.bj-model{font-weight:700;}
 #bj-table tr.bj-first td{border-top:2px solid var(--border-strong);}
@@ -1235,6 +1237,10 @@ function parseWorkbook(buf){
 
   document.getElementById('period').textContent = new Date().toLocaleString('ko-KR',{hour12:false});
 
+  // [2026-10-16] 기준일: 오늘 출고 데이터가 있으면 오늘, 없으면 어제. 최근 N일·하루판매·발주 판단이 모두 이 날까지
+  { const t=new Date(); t.setHours(0,0,0,0);
+    const hasToday=state.ord.some(o=>{ const d=new Date(o.date); d.setHours(0,0,0,0); return d.getTime()===t.getTime(); });
+    state.baseDay = hasToday ? t : new Date(t.getTime()-86400000); }
   applyUnifiedInv();   // [2026-10-16] 판매·발주 기준 통일
 
   // 사이드바 브랜드 목록을 먼저 만들고(전역 브랜드를 두 탭 필터에 밀어넣음) 그 다음 렌더링
@@ -1824,7 +1830,7 @@ const BJ_EU = {'235':37,'240':38,'245':39,'250':40,'255':41,'260':41,'265':42,'2
    - 올해 판매 / 작년 동기 판매 = 막대, 판매가능재고 = 꺾은선, 예측(판매·재고) = 점선
    - 지난 주의 판매가능재고 = 현재고 + 그 뒤 판매 − 그 뒤 입고 (입고로그 시트가 있을 때만 계산)
    - 판매량 = 일반판매 + 체험단 (샘플·유투버·직원구매 등 기타출고 제외)
-   - 예측 하루 판매량 = 최근 2개월(60일, 어제까지) 판매량 ÷ 60 (단순 평균)
+   - 예측 하루 판매량 = 최근 2개월(60일, 기준일까지) 판매량 ÷ 60 (단순 평균)
    - 안전재고 = 1.65 × 일판매 표준편차(최근 2개월) × √리드타임 50일 (품절 없이 버틸 확률 약 95%) */
 const BJD = {code:null, weeks:13, FC_WEEKS:8, RATE_DAYS:60, LEAD_DAYS:50, Z:1.65};
 const DAY=86400000;
@@ -1841,11 +1847,13 @@ function bjdSafety(code, endT){
 function bjdDay(d){ const x=new Date(d); x.setHours(0,0,0,0); return x; }
 function bjdMonday(d){ const x=bjdDay(d); const w=(x.getDay()+6)%7; return new Date(x.getTime()-w*DAY); }
 function bjdMD(d){ return String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+// [2026-10-16] 기준일 다음날 0시(이 시각 전까지 집계). 기준일 = 오늘 출고 데이터가 있으면 오늘, 없으면 어제
+function bjdBaseEnd(){ const b=state.baseDay||new Date(bjdDay(new Date()).getTime()-DAY); return bjdDay(b).getTime()+DAY; }
 function bjdForecastRate(code, today){
-  const from=today.getTime()-BJD.RATE_DAYS*DAY;
   const byDay={};
-  // [2026-10-16] 오늘은 매출이 마감 후(18시 이후)에 들어오므로 제외 → 어제까지 60일
-  state.ord.forEach(o=>{ if(o.code===code && o.date && bjdIsSale(o)){ const t=bjdDay(o.date).getTime(); if(t>=from && t<today.getTime()) byDay[t]=(byDay[t]||0)+o.qty; } });
+  // [2026-10-16 변경] 기준일(오늘 데이터 있으면 오늘, 없으면 어제)까지 60일. today 인자는 호환용으로만 남김
+  const end=bjdBaseEnd(), from2=end-BJD.RATE_DAYS*DAY;
+  state.ord.forEach(o=>{ if(o.code===code && o.date && bjdIsSale(o)){ const t=bjdDay(o.date).getTime(); if(t>=from2 && t<end) byDay[t]=(byDay[t]||0)+o.qty; } });
   // [2026-10-16] 몰린 날 자르기 제거(사용자 결정) → 60일 단순 평균 = 판매수량 합 ÷ 60
   const vals=Object.values(byDay).filter(v=>v>0);
   if(!vals.length) return {rate:0, capped:0, days:0};
@@ -1855,7 +1863,8 @@ function bjdForecastRate(code, today){
 
 /* [2026-10-16] 판매·발주 기준 통일 (사용자 확정)
    - 판매수량 = 일반판매 + 체험단 (샘플·유투버·직원구매·CS출고 등 제외)
-   - 최근 N일 = 오늘 제외, 어제까지 N일 (매출은 당일 마감 후 들어옴)
+   - 최근 N일 = 기준일까지 N일. 기준일 = 오늘 출고 데이터가 있으면 오늘, 없으면 어제 (2026-10-16 변경)
+   - 누적판매수량 = 오늘까지 전부 (현재고와 같은 기준)
    - 발주필요 = 보유(현재고+입고예정수량) < 하루판매 × (리드타임+여유), 부족수량(=발주필요수량) = 하루판매 × (리드타임+여유+주기) − 보유(반올림)
      브랜드별 값은 brandOrderParams() (바오지 50/40/30, 그 밖 7/7/14)
    재고 상세 표·KPI·TOP10·바오지 재고표가 모두 이 값을 씁니다. (vol5 매크로가 보낸 최근7일/2개월/누적/발주필요 값은 덮어씀) */
@@ -1866,15 +1875,15 @@ const DEFAULT_ORDER_PARAMS = {lead:7, safety:7, cycle:14};
 function brandOrderParams(brand){ return BRAND_ORDER_PARAMS[String(brand||'').trim()] || DEFAULT_ORDER_PARAMS; }
 function applyUnifiedInv(){
   const today=bjdDay(new Date()), t0=today.getTime();
-  const from7=t0-7*DAY, from60=t0-60*DAY;
+  const end=bjdBaseEnd(), from7=end-7*DAY, from60=end-60*DAY;   // 최근 7일·60일 = 기준일까지
   const agg={};
   state.ord.forEach(o=>{
     if(!o.code || !o.date || !bjdIsSale(o)) return;
-    const t=bjdDay(o.date).getTime(); if(t>=t0) return;          // 오늘 이후 제외
+    const t=bjdDay(o.date).getTime(); if(t>t0) return;           // 내일 이후 날짜만 제외 (누적은 오늘까지)
     const a=agg[o.code]||(agg[o.code]={cum:0,exp:0,d7:0,d60:0});
     a.cum+=o.qty; if(o.type==='체험단') a.exp+=o.qty;
-    if(t>=from7) a.d7+=o.qty;
-    if(t>=from60) a.d60+=o.qty;
+    if(t>=from7 && t<end) a.d7+=o.qty;
+    if(t>=from60 && t<end) a.d60+=o.qty;
   });
   state.inv.forEach(it=>{
     const a=agg[it.code]||{cum:0,exp:0,d7:0,d60:0};
@@ -1926,7 +1935,7 @@ function renderBjDetail(){
       other: sumRange(ords,s.getTime(),e.getTime(),o=>o.type==='체험단'),   // 체험단 (변수명은 그대로 둠)
       ly: (firstOrd && ly1>firstOrd.getTime()) ? sumRange(ords,ly0,ly1,bjdIsSale) : null,
       inQty: sumRange(ins,s.getTime(),e.getTime()),
-      safety: bjdSafety(code, Math.min(e.getTime()-DAY, today.getTime()-DAY)),   // 어제까지
+      safety: bjdSafety(code, Math.min(e.getTime()-DAY, bjdBaseEnd()-DAY)),   // 기준일까지
       stock: stockEnd});   // 판매가능재고는 실제 재고 흐름이라 샘플·유투버 등 모든 출고를 반영
   }
   const hasLog=!!state.hasInLog;
@@ -1968,7 +1977,7 @@ function renderBjDetail(){
     `<div class="fc"><div class="l">예상 품절일</div><div class="v">${outDate?fmtD(outDate)+` (${fmtNum(outDays)}일)`:'판매 없음'}</div></div>`+
     `<div><div class="l">안전재고 (현재)</div><div class="v">${fmtNum(curSafety)}개</div></div>`;
   const notes=[`판매량 = 일반판매 + 체험단 (샘플·유투버 등 기타출고 제외).`,
-    `예측 기준: 최근 2개월(60일, 어제까지) 판매 ${fmtNum(fr.total||0)}개 ÷ 60 = 하루 ${Math.round(fr.rate*100)/100}개 (판매가 있던 날 ${fr.days}일). 입고예정은 예측에 넣지 않았습니다.`,
+    `예측 기준: 최근 2개월(60일, ${bjdMD(new Date(bjdBaseEnd()-DAY))}까지) 판매 ${fmtNum(fr.total||0)}개 ÷ 60 = 하루 ${Math.round(fr.rate*100)/100}개 (판매가 있던 날 ${fr.days}일). 입고예정은 예측에 넣지 않았습니다.`,
     `안전재고 = 1.65 × 최근 2개월 일판매 표준편차 × √50일(리드타임). 판매가 들쑥날쑥할수록 커집니다.`];
   if(!hasLog) notes.push('지난 주의 판매가능재고 선은 입고로그 데이터가 있어야 그려집니다(매크로 수정본 적용 후 표시).');
   else notes.push('지난 주의 판매가능재고 = 현재고 + 그 뒤 판매 − 그 뒤 입고(입고입력 반영완료 기준). 월마감으로 옮겨진 입고는 빠질 수 있습니다.');
@@ -2125,10 +2134,10 @@ function computeOrdPeriodRange(){
   switch(p.preset){
     case 'today': return [today, endOfToday];
     case 'yesterday': { const s=new Date(today); s.setDate(s.getDate()-1); const e=new Date(s); e.setHours(23,59,59,999); return [s,e]; }
-    // [2026-10-16] 최근 N일·N개월은 오늘 제외, 어제까지 (매출은 당일 마감 후 들어옴)
-    case 'last7': { const s=new Date(today); s.setDate(s.getDate()-7); const e=new Date(today); e.setDate(e.getDate()-1); e.setHours(23,59,59,999); return [s, e]; }
-    case 'last1m': { const s=new Date(today); s.setMonth(s.getMonth()-1); const e=new Date(today); e.setDate(e.getDate()-1); e.setHours(23,59,59,999); return [s, e]; }
-    case 'last3m': { const s=new Date(today); s.setMonth(s.getMonth()-3); const e=new Date(today); e.setDate(e.getDate()-1); e.setHours(23,59,59,999); return [s, e]; }
+    // [2026-10-16 변경] 최근 N일·N개월은 기준일까지: 오늘 출고 데이터가 있으면 오늘, 없으면 어제 (state.baseDay)
+    case 'last7': { const b=new Date(state.baseDay); const s=new Date(b); s.setDate(s.getDate()-6); const e=new Date(b); e.setHours(23,59,59,999); return [s, e]; }
+    case 'last1m': { const b=new Date(state.baseDay); const s=new Date(b); s.setMonth(s.getMonth()-1); s.setDate(s.getDate()+1); const e=new Date(b); e.setHours(23,59,59,999); return [s, e]; }
+    case 'last3m': { const b=new Date(state.baseDay); const s=new Date(b); s.setMonth(s.getMonth()-3); s.setDate(s.getDate()+1); const e=new Date(b); e.setHours(23,59,59,999); return [s, e]; }
     case 'custom': {
       const f=p.from ? new Date(p.from+'T00:00:00') : null;
       const t=p.to ? new Date(p.to+'T23:59:59') : null;
