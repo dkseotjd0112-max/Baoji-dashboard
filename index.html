@@ -314,6 +314,7 @@ tbody tr.need td{background:rgba(212,47,82,.08);}
 /* [2026-10-16] 단종·공급불가: 회색 줄 + 태그, 발주 판단 제외 */
 #bj-table tr.bj-stop td:not(.bj-merge){background:rgba(17,17,17,.05);color:var(--text-tertiary);}
 #bj-table .bj-stop-tag{display:inline-block;font-size:9.5px;font-weight:700;color:#fff;background:#8a8a8a;border-radius:3px;padding:0 4px;vertical-align:1px;}
+#bj-table .bj-new-tag{display:inline-block;margin-top:4px;font-size:9.5px;font-weight:700;color:var(--color-info-fg);background:rgba(46,123,214,.10);border-radius:3px;padding:1px 5px;}
 .bj-legend.bj-legend-stop{background:rgba(17,17,17,.07);color:var(--text-secondary);}
 /* [2026-10-16] 상세 주간표: 판매 숫자 클릭 → 그 주 판매 내역 */
 #bjd-table a.bjd-sl{color:var(--color-info-fg);text-decoration:underline;text-underline-offset:2px;cursor:pointer;}
@@ -1172,6 +1173,7 @@ function parseWorkbook(buf){
     color:r['컬러']||'', inQty:(r['누적입고수량']===undefined||r['누적입고수량']==='')?null:toNum(r['누적입고수량']),
     // [2026-10-16] 판매상태: 단종(추가 발주 계획 없음) / 공급불가(제조사 재고 없음) → 발주 판단에서 제외. 빈 값 = 판매중
     saleStatus: ['단종','공급불가'].includes(String(r['판매상태']||'').trim()) ? String(r['판매상태']).trim() : '',
+    isNewModel: String(r['판매상태']||'').trim()==='신규모델',   // [2026-10-16] 신규모델: 재고표 모델명 밑에 표시만 (발주 판단은 그대로)
   }));
   state.inv.forEach(it=>{
     const dailyRate = it.last7>0 ? it.last7/7 : (it.last2m>0 ? it.last2m/60 : 0);
@@ -1790,7 +1792,7 @@ function renderBjTable(){
       const tip=stop?` title="${stop==='단종'?'단종: 추가 발주 계획 없음':'공급불가: 제조사 재고 없음'} → 발주 판단 안 함 (vol5 마스터테이블 판매상태)"`:rate>0?` title="예측 하루 ${Math.round(rate*100)/100}개 · 보유(현재고+입고예정) ${have}개 = 약 ${Math.round(have/rate)}일치&#10;긴급 기준 ${BJ_LEAD_DAYS}일치 ${r1(rate*BJ_LEAD_DAYS)}개 · 발주필요 기준 ${BJ_LEAD_DAYS+BJ_SAFETY_DAYS}일치 ${r1(rate*(BJ_LEAD_DAYS+BJ_SAFETY_DAYS))}개${reviewDays>0?` · 발주검토 기준 ${BJ_LEAD_DAYS+BJ_SAFETY_DAYS+reviewDays}일치 ${r1(rate*(BJ_LEAD_DAYS+BJ_SAFETY_DAYS+reviewDays))}개`:''}&#10;발주필요수량 = ${BJ_LEAD_DAYS+BJ_SAFETY_DAYS+BJ_CYCLE_DAYS}일치 ${r1(targetQty)}개 − 보유 ${have}개${(need||review)?` = ${needQty}개`:' → 발주 불필요'}"`:` title="최근 2개월 판매 없음 → 발주 판단 안 함"`;
       html+=`<tr class="${i===0?'bj-first':''}${need?' bj-need':''}${urgent?' bj-urgent':''}${review?' bj-review':''}${stop?' bj-stop':''}"${tip}>`+
         (i===0?`<td rowspan="${n}" class="bj-merge bj-img">${g.img?`<div class="bj-crop"><img src="${escAttr(g.img)}" alt="${esc(g.model)} ${esc(g.color)}" loading="lazy"></div>`:''}</td>`+
-               `<td rowspan="${n}" class="bj-merge bj-model">${esc(g.model)||'-'}</td>`+
+               `<td rowspan="${n}" class="bj-merge bj-model">${esc(g.model)||'-'}${g.rows.some(x=>x.isNewModel)?'<div><span class="bj-new-tag">신규모델</span></div>':''}</td>`+
                `<td rowspan="${n}" class="bj-merge">${esc(g.color)||'-'}</td>`:'')+
         `<td><a class="bj-code" data-code="${escAttr(r.code)}" href="#">${esc(r.code)}</a></td><td class="num">${esc(r.size)||'-'}${BJ_EU[String(r.size).trim()]?`<span class="bj-eu">(${BJ_EU[String(r.size).trim()]})</span>`:''}</td>`+
         `<td class="num">${r.inQty==null?'-':fmtNum(r.inQty)}</td><td class="num">${fmtNum(r.cumQty)}</td><td class="num">${ratio}</td>`+
