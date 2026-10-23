@@ -316,6 +316,9 @@ tbody tr.need td{background:rgba(212,47,82,.08);}
 .bj-review-ctl input{width:52px;padding:4px 6px;border:1px solid var(--border-strong);border-radius:6px;font:inherit;text-align:center;}
 #bj-table .bj-urgent-tag{display:inline-block;font-size:9.5px;font-weight:700;color:#fff;background:var(--color-error-fg);border-radius:3px;padding:0 4px;margin-right:4px;vertical-align:1px;}
 #bj-table th{text-align:center;}
+/* [2026-10-21 검토사본] 보유일수 열 · 발주검토 '약 N일 뒤' */
+#bj-table .bj-mon{color:var(--text-tertiary);font-size:11px;}
+#bj-table .bj-until{color:var(--color-warning-fg);font-size:11.5px;font-weight:600;}
 /* [2026-10-16] 단종·공급불가: 회색 줄 + 태그, 발주 판단 제외 */
 #bj-table tr.bj-stop td:not(.bj-merge){background:rgba(17,17,17,.05);color:var(--text-tertiary);}
 #bj-table .bj-stop-tag{display:inline-block;font-size:9.5px;font-weight:700;color:#fff;background:#8a8a8a;border-radius:3px;padding:0 4px;vertical-align:1px;}
@@ -738,14 +741,17 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
         <div class="table-head">
           <h3>바오지 재고표</h3>
           <button class="btn-file" id="bj-exportBtn">엑셀로 내려받기</button>
-          <label class="bj-review-ctl" for="bj-reviewDays" title="발주필요 기준(90일치)에 며칠을 더해서 '곧 발주필요가 될 품목'까지 같이 볼지. 기본 30일 = 발주주기">발주검토 +<input type="number" id="bj-reviewDays" min="0" max="60" step="5" value="30">일</label>
+          <!-- [2026-10-21 검토사본] 새 발주 규칙: 보유일수 = (현재고+입고예정) ÷ 하루판매 -->
+          <label class="bj-review-ctl" for="bj-needDays" title="보유일수가 이 값 미만이면 발주필요">발주필요 &lt;<input type="number" id="bj-needDays" min="1" max="365" step="5" value="60">일</label>
+          <label class="bj-review-ctl" for="bj-reviewDays" title="보유일수가 발주필요 기준 이상 ~ 이 값 미만이면 발주검토 (수량은 표시하지 않음)">발주검토 &lt;<input type="number" id="bj-reviewDays" min="0" max="365" step="5" value="90">일</label>
+          <label class="bj-review-ctl" for="bj-targetDays" title="발주필요수량 = 하루판매 × 이 일수 (반올림)">발주량 = 하루판매 ×<input type="number" id="bj-targetDays" min="1" max="365" step="5" value="50">일</label>
           <label class="bj-review-ctl" for="bj-hideStop" title="vol5 마스터테이블 판매상태가 단종·공급불가인 SKU를 표에서 숨깁니다"><input type="checkbox" id="bj-hideStop" style="width:auto;">단종·공급불가 숨김</label>
           <span class="row-count" id="bj-rowCount"></span>
         </div>
         <div class="tbl-scroll">
           <table id="bj-table"><thead><tr>
             <th>이미지</th><th class="bj-col-model">모델</th><th>색상</th><th class="bj-col-code">상품코드</th><th class="num">사이즈</th>
-            <th class="num">누적<br>입고수량</th><th class="num">누적<br>판매수량</th><th class="num">누적<br>판매비율</th><th class="num">현재고</th><th class="num">발주<br>필요수량</th><th class="num">입고<br>예정수량</th>
+            <th class="num">누적<br>입고수량</th><th class="num">누적<br>판매수량</th><th class="num">누적<br>판매비율</th><th class="num">현재고</th><th class="num">발주<br>필요수량</th><th class="num">입고<br>예정수량</th><th class="num">보유일수</th>
           </tr></thead><tbody id="bj-tbody"></tbody></table>
         </div>
       </section>
@@ -1802,28 +1808,22 @@ function renderBjTable(){
     const gSold=g.rows.reduce((a,r)=>a+(r.cumQty||0),0);
     g.rows.forEach((r,i)=>{
       const rate=bjdForecastRate(r.code, today).rate;
-      // [2026-10-16] 보유 = 현재고 + 입고예정수량.
-      //  긴급     : 보유 < 리드타임 50일치  → 지금 발주해도 입고 전에 품절
-      //  발주필요 : 보유 < 50일 + 여유 50일 = 100일치 (발주점)
-      //  발주필요수량 = 하루 판매 × (리드타임 50 + 여유 50 + 발주주기 40 = 140일) − 보유, 반올림
+      // [2026-10-21 검토사본] 새 규칙 — bjRule() 참고
       const have=r.stock+poQty(r);
-      const stop=r.saleStatus;   // [2026-10-16] 단종·공급불가 → 긴급·발주필요·발주검토·발주필요수량 모두 제외
-      const need=!stop && rate>0 && have < rate*(BJ_LEAD_DAYS+BJ_SAFETY_DAYS);
-      const urgent=need && have < rate*BJ_LEAD_DAYS;
-      // [2026-10-16] 발주검토: 아직 100일치 이상이지만 (100 + 검토일수)일치 미만 → 곧 발주필요가 될 품목
-      const reviewDays=bjReviewDays();
-      const review=!stop && rate>0 && !need && reviewDays>0 && have < rate*(BJ_LEAD_DAYS+BJ_SAFETY_DAYS+reviewDays);
+      const stop=r.saleStatus;   // [2026-10-16] 단종·공급불가 → 발주필요·발주검토·발주필요수량 모두 제외
+      const S=bjSettings();
+      const R=bjRule(rate, have, stop, S);
+      const need=R.need, urgent=R.short, review=R.review, needQty=R.qty;
       if(stop) stopCnt++;
       if(need) needCnt++;
       if(urgent) urgentCnt++;
       if(review) reviewCnt++;
-      const targetQty=rate*(BJ_LEAD_DAYS+BJ_SAFETY_DAYS+BJ_CYCLE_DAYS);
-      const needQty = (need||review) ? Math.max(0, Math.round(targetQty - have)) : 0;
       const ratio=gSold>0 ? Math.round(r.cumQty/gSold*1000)/10+'%' : '-';
       exportRows.push({model:g.model, color:g.color, code:r.code, size:r.size, inQty:r.inQty, sold:r.cumQty,
-        ratio: gSold>0 ? r.cumQty/gSold : null, stock:r.stock, needQty, po:poQty(r), need, urgent, review, stop});
+        ratio: gSold>0 ? r.cumQty/gSold : null, stock:r.stock, needQty, po:poQty(r), days:R.days, need, urgent, review, stop});
       const r1=v=>Math.round(v*10)/10;
-      const tip=stop?` title="${stop==='단종'?'단종: 추가 발주 계획 없음':'공급불가: 제조사 재고 없음'} → 발주 판단 안 함 (vol5 마스터테이블 판매상태)"`:rate>0?` title="예측 하루 ${Math.round(rate*100)/100}개 · 보유(현재고+입고예정) ${have}개 = 약 ${Math.round(have/rate)}일치&#10;긴급 기준 ${BJ_LEAD_DAYS}일치 ${r1(rate*BJ_LEAD_DAYS)}개 · 발주필요 기준 ${BJ_LEAD_DAYS+BJ_SAFETY_DAYS}일치 ${r1(rate*(BJ_LEAD_DAYS+BJ_SAFETY_DAYS))}개${reviewDays>0?` · 발주검토 기준 ${BJ_LEAD_DAYS+BJ_SAFETY_DAYS+reviewDays}일치 ${r1(rate*(BJ_LEAD_DAYS+BJ_SAFETY_DAYS+reviewDays))}개`:''}&#10;발주필요수량 = ${BJ_LEAD_DAYS+BJ_SAFETY_DAYS+BJ_CYCLE_DAYS}일치 ${r1(targetQty)}개 − 보유 ${have}개${(need||review)?` = ${needQty}개`:' → 발주 불필요'}"`:` title="최근 2개월 판매 없음 → 발주 판단 안 함"`;
+      const tip=stop?` title="${stop==='단종'?'단종: 추가 발주 계획 없음':'공급불가: 제조사 재고 없음'} → 발주 판단 안 함 (vol5 마스터테이블 판매상태)"`:rate>0?` title="하루판매 ${Math.round(rate*100)/100}개 (최근 60일 평균) · 보유(현재고 ${r.stock} + 입고예정 ${poQty(r)}) ${have}개 = 약 ${Math.round(R.days)}일치&#10;발주필요 기준 ${S.need}일 미만 · 발주검토 기준 ${S.need}~${S.review}일${need?`&#10;발주필요수량 = 하루판매 ${r1(rate)} × ${S.target}일 = ${needQty}개`:''}${urgent?`&#10;결품 예상: 보유 ${Math.round(R.days)}일 < 리드타임 ${BJ_LEAD_DAYS}일 → 입고 전에 품절`:''}${review?`&#10;약 ${R.until}일 뒤 발주필요 (지금은 수량 없음)`:''}"`:` title="최근 2개월 판매 없음 → 발주 판단 안 함"`;
+      const daysTxt = stop||!(rate>0) ? '-' : `${fmtNum(Math.round(R.days))}일 <span class="bj-mon">(${(R.days/30).toFixed(1)}개월)</span>`;
       html+=`<tr class="${i===0?'bj-first':''}${need?' bj-need':''}${urgent?' bj-urgent':''}${review?' bj-review':''}${stop?' bj-stop':''}"${tip}>`+
         (i===0?`<td rowspan="${n}" class="bj-merge bj-img">${g.img?`<div class="bj-crop"><img src="${escAttr(g.img)}" alt="${esc(g.model)} ${esc(g.color)}" loading="lazy"></div>`:''}</td>`+
                `<td rowspan="${n}" class="bj-merge bj-model">${esc(g.model)||'-'}${g.rows.some(x=>x.isNewModel)?'<div><span class="bj-new-tag">신규모델</span></div>':''}</td>`+
@@ -1831,8 +1831,9 @@ function renderBjTable(){
         `<td><a class="bj-code" data-code="${escAttr(r.code)}" href="#">${esc(r.code)}</a></td><td class="num">${esc(r.size)||'-'}${BJ_EU[String(r.size).trim()]?`<span class="bj-eu">(${BJ_EU[String(r.size).trim()]})</span>`:''}</td>`+
         `<td class="num">${r.inQty==null?'-':fmtNum(r.inQty)}</td><td class="num">${fmtNum(r.cumQty)}</td><td class="num">${ratio}</td>`+
         `<td class="num">${fmtNum(r.stock)}</td>`+
-        `<td class="num${needQty>0?(review?' bj-reviewqty':' bj-needqty'):''}">${stop?`<span class="bj-stop-tag">${stop}</span>`:''}${urgent?'<span class="bj-urgent-tag">긴급</span>':''}${needQty>0?fmtNum(needQty):'-'}</td>`+
-        `<td class="num">${poQty(r)>0?`<span class="bj-po" data-code="${escAttr(r.code)}">${fmtNum(poQty(r))}</span>`:'-'}</td></tr>`;
+        `<td class="num${needQty>0?' bj-needqty':''}">${stop?`<span class="bj-stop-tag">${stop}</span>`:''}${urgent?'<span class="bj-urgent-tag">결품 예상</span>':''}${needQty>0?fmtNum(needQty):(review?`<span class="bj-until">약 ${fmtNum(R.until)}일 뒤</span>`:'-')}</td>`+
+        `<td class="num">${poQty(r)>0?`<span class="bj-po" data-code="${escAttr(r.code)}">${fmtNum(poQty(r))}</span>`:'-'}</td>`+
+        `<td class="num bj-days">${daysTxt}</td></tr>`;
     });
   });
   document.getElementById('bj-tbody').innerHTML=html;
@@ -1840,22 +1841,48 @@ function renderBjTable(){
   state.bjExportRows=exportRows;
   document.getElementById('bj-rowCount').innerHTML=
     // [2026-10-16] 쉬운 문구: 색마다 "지금 발주하면 어떻게 되는지"로 설명. 건수는 색별로 따로(분홍 = 발주필요 중 긴급 제외)
-    `<span class="bj-legend bj-legend-urgent" title="보유가 ${BJ_LEAD_DAYS}일치(리드타임) 미만">긴급 ${fmtNum(urgentCnt)}건 · 지금 발주해도 결품</span> `+
-    `<span class="bj-legend" title="보유가 ${BJ_LEAD_DAYS}~${BJ_LEAD_DAYS+BJ_SAFETY_DAYS}일치">발주필요 ${fmtNum(needCnt-urgentCnt)}건 · 지금 발주하면 결품 없음</span> `+
-    (bjReviewDays()>0?`<span class="bj-legend bj-legend-review" title="보유가 ${BJ_LEAD_DAYS+BJ_SAFETY_DAYS}~${BJ_LEAD_DAYS+BJ_SAFETY_DAYS+bjReviewDays()}일치">발주검토 ${fmtNum(reviewCnt)}건 · ${bjReviewDays()}일 안에 발주필요</span>`:'')+
-    `<span class="bj-legend-note">발주필요수량 = ${BJ_LEAD_DAYS+BJ_SAFETY_DAYS+BJ_CYCLE_DAYS}일치(리드타임 ${BJ_LEAD_DAYS} + 재고보유 ${BJ_SAFETY_DAYS} + 발주주기 ${BJ_CYCLE_DAYS}) − 보유(현재고+입고예정)</span>`+
+    // [2026-10-21 검토사본] 긴급은 발주필요에 합치고, 그중 결품 예상 건수만 따로 표시
+    `<span class="bj-legend" title="보유일수 ${bjSettings().need}일 미만">발주필요 ${fmtNum(needCnt)}건${urgentCnt?` (결품 예상 ${fmtNum(urgentCnt)})`:''}</span> `+
+    (bjSettings().review>bjSettings().need?`<span class="bj-legend bj-legend-review" title="보유일수 ${bjSettings().need}~${bjSettings().review}일">발주검토 ${fmtNum(reviewCnt)}건 · 수량 없음</span>`:'')+
+    `<span class="bj-legend-note">보유일수 = (현재고+입고예정) ÷ 하루판매(최근 60일 평균) · 발주필요수량 = 하루판매 × ${bjSettings().target}일 · 결품 예상 = 보유일수 &lt; 리드타임 ${BJ_LEAD_DAYS}일</span>`+
     (stopAll?` <span class="bj-legend bj-legend-stop" title="vol5 마스터테이블 판매상태가 단종·공급불가인 SKU. 발주 판단에서 뺍니다">단종·공급불가 ${fmtNum(stopAll)}건 · 발주 안 함${hideStop?' (숨김)':''}</span>`:'')+
     ` · 모델·색상 ${fmtNum(groups.length)}개 · SKU ${fmtNum(rows.length)}건`;
 }
 // [2026-10-16] 바오지 발주 기준 (사용자 확정): 리드타임 약 50일, 여유 50일, 발주주기 약 40일
 const BJ_LEAD_DAYS = 50, BJ_SAFETY_DAYS = 40, BJ_CYCLE_DAYS = 30;   // [2026-10-16 변경] 재고보유 40일, 발주주기 30일   // = BRAND_ORDER_PARAMS['바오지']
 const BJ_COVER_DAYS = BJ_LEAD_DAYS + BJ_SAFETY_DAYS;   // 발주점 100일 (다른 곳 호환용)
-// [2026-10-16] 발주검토 일수(기본 30일 = 발주주기). 표 위 입력칸에서 바꾸며, 이 브라우저에만 기억합니다.
-function bjReviewDays(){ const el=document.getElementById('bj-reviewDays'); const v=el?Number(el.value):30; return isFinite(v)&&v>=0 ? Math.min(v,60) : 30; }
+/* [2026-10-21 검토사본] 바오지 새 발주 규칙
+   - 보유일수 = (현재고 + 입고예정) ÷ 하루판매(최근 60일 평균)
+   - 발주필요 : 보유일수 < [발주필요]일 (긴급은 여기에 합침). 그중 보유일수 < 리드타임 50일이면 '결품 예상' 표시
+   - 발주검토 : [발주필요] ~ [발주검토]일. 수량은 없고 '약 N일 뒤' (= 발주필요가 되기까지 남은 일수)만 표시
+   - 발주필요수량 = 하루판매 × [발주량]일, 반올림 (발주필요 줄에만)
+   입력값 3개는 표 위 입력칸에서 바꾸며, 이 브라우저에만 기억합니다. */
+const BJ_RULE_DEF = {need:60, review:90, target:50};
+const BJ_RULE_KEYS = {need:'bj-needDays', review:'bj-reviewDays', target:'bj-targetDays'};
+function bjSettings(){
+  const o={};
+  for(const k in BJ_RULE_KEYS){ const el=document.getElementById(BJ_RULE_KEYS[k]); const v=el?Number(el.value):NaN;
+    o[k]= isFinite(v)&&v>=0&&el.value!=='' ? v : BJ_RULE_DEF[k]; }
+  return o;
+}
+function bjRule(rate, have, stop, S){
+  S=S||bjSettings();
+  const ok=!stop && rate>0;
+  const days= rate>0 ? have/rate : Infinity;
+  const need= ok && days < S.need;
+  const review= ok && !need && days < S.review;
+  return { days, need, review,
+    short: need && days < BJ_LEAD_DAYS,
+    qty: need ? Math.max(0, Math.round(rate*S.target)) : 0,
+    until: review ? Math.max(1, Math.ceil(days - S.need)) : 0 };
+}
 (function(){
-  const el=document.getElementById('bj-reviewDays'); if(!el) return;
-  try{ const s=localStorage.getItem('bj-reviewDays2'); if(s!==null && s!=='') el.value=s; }catch(e){}
-  el.addEventListener('change',()=>{ try{ localStorage.setItem('bj-reviewDays2', el.value); }catch(e){} renderBjTable(); });
+  for(const k in BJ_RULE_KEYS){
+    const id=BJ_RULE_KEYS[k], el=document.getElementById(id); if(!el) continue;
+    try{ const s=localStorage.getItem(id+'_v3'); if(s!==null && s!=='') el.value=s; }catch(e){}
+    el.addEventListener('change',()=>{ try{ localStorage.setItem(id+'_v3', el.value); }catch(e){}
+      if(state.inv && state.inv.length){ applyUnifiedInv(); renderInv(); } else renderBjTable(); });
+  }
   const hs=document.getElementById('bj-hideStop');
   if(hs){ try{ hs.checked=localStorage.getItem('bj-hideStop')==='1'; }catch(e){}
     hs.addEventListener('change',()=>{ try{ localStorage.setItem('bj-hideStop', hs.checked?'1':'0'); }catch(e){} renderBjTable(); }); }
@@ -1930,9 +1957,14 @@ function applyUnifiedInv(){
     const have=it.stock+(it.onOrder||0);
     const P=brandOrderParams(it.brand);   // 브랜드별 리드타임·여유·주기
     it.dailyRate=rate; it.orderParams=P;
+    if(String(it.brand||'').trim()==='바오지'){   // [2026-10-21 검토사본] 바오지는 새 규칙 (바오지 재고표와 같은 값)
+      const R=bjRule(rate, have, it.saleStatus);
+      it.needOrder=R.need; it.urgent=R.short; it.shortage=R.qty;
+    } else {
     it.needOrder = !it.saleStatus && rate>0 && have < rate*(P.lead+P.safety);   // 단종·공급불가는 발주 판단 제외
     it.urgent = it.needOrder && have < rate*P.lead;
     it.shortage = it.needOrder ? Math.max(0, Math.round(rate*(P.lead+P.safety+P.cycle) - have)) : 0;
+    }
     it.baseStock = Math.round(rate*(P.lead+P.safety));
     it.daysLeft = rate>0 ? Math.round(it.stock/rate) : null;
     it.stockIn60d = Math.max(0, Math.round(it.stock + (it.onOrder||0) - rate*60));
@@ -2054,15 +2086,15 @@ document.getElementById('bj-zoom').addEventListener('click',()=>{ document.getEl
 document.getElementById('bj-exportBtn').addEventListener('click',()=>{
   const rows=state.bjExportRows||[];
   const fd=d=>d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'날짜 미정';
-  const header=['모델','색상','상품코드','사이즈','누적입고수량','누적판매수량','누적판매비율','현재고','발주필요수량','입고예정수량','입고예정 상세(차수·예정일·수량·상태·비고)','발주필요'];
+  const header=['모델','색상','상품코드','사이즈','누적입고수량','누적판매수량','누적판매비율','현재고','발주필요수량','입고예정수량','입고예정 상세(차수·예정일·수량·상태·비고)','보유일수','발주필요'];
   const data=rows.map(r=>{
     const lines=(state.poLines&&state.poLines[r.code])||[];
     const detail=lines.map((l,i)=>`${i+1}차 ${fd(l.date)} ${l.qty}개 ${l.status||''}${l.note?' ('+l.note+')':''}`.trim()).join(' / ');
-    return [r.model, r.color, r.code, r.size, r.inQty, r.sold, r.ratio, r.stock, r.needQty||null, r.po||null, detail, r.stop?r.stop:(r.urgent?'긴급':(r.need?'발주필요':(r.review?'발주검토':'')))];
+    return [r.model, r.color, r.code, r.size, r.inQty, r.sold, r.ratio, r.stock, r.needQty||null, r.po||null, detail, (r.stop||!isFinite(r.days))?null:Math.round(r.days), r.stop?r.stop:(r.urgent?'발주필요(결품 예상)':(r.need?'발주필요':(r.review?'발주검토':'')))];
   });
   const ws=XLSX.utils.aoa_to_sheet([header,...data]);
   for(let i=0;i<data.length;i++){ const c=ws[XLSX.utils.encode_cell({r:i+1,c:6})]; if(c && typeof c.v==='number') c.z='0.0%'; }
-  ws['!cols']=[{wch:12},{wch:10},{wch:22},{wch:7},{wch:11},{wch:11},{wch:11},{wch:8},{wch:11},{wch:11},{wch:48},{wch:9}];
+  ws['!cols']=[{wch:12},{wch:10},{wch:22},{wch:7},{wch:11},{wch:11},{wch:11},{wch:8},{wch:11},{wch:11},{wch:48},{wch:9},{wch:16}];
   ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:data.length,c:header.length-1}})};
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'바오지재고표');
