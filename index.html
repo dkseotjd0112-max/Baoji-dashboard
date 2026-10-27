@@ -318,6 +318,10 @@ tbody tr.need td{background:rgba(212,47,82,.08);}
 #bj-table .bj-urgent-tag{display:inline-block;font-size:9.5px;font-weight:700;color:#fff;background:var(--color-error-fg);border-radius:3px;padding:0 4px;margin-right:4px;vertical-align:1px;}
 #bj-table th{text-align:center;}
 /* [2026-10-21 검토사본] 보유일수 열 · 발주검토 '약 N일 뒤' */
+#bj-edpTip{position:fixed;z-index:1100;display:flex;align-items:center;gap:8px;background:var(--bg-elevated);border:1px solid var(--border-strong);border-radius:var(--radius-md);box-shadow:0 6px 24px rgba(0,0,0,.14);padding:6px 8px 6px 10px;font-size:12px;}
+#bj-edpTip .l{color:var(--text-tertiary);font-weight:600;}
+#bj-edpTip .v{font-weight:700;user-select:all;font-variant-numeric:tabular-nums;}
+#bj-edpTip button{font:600 11px/1 'Pretendard',sans-serif;border:1px solid var(--border-strong);background:transparent;border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text-secondary);}
 #bj-table .bj-brand{font-size:10.5px;font-weight:500;color:var(--text-tertiary);margin-top:2px;}
 #bj-table .bj-mon{color:var(--text-tertiary);font-size:11px;}
 #bj-table .bj-until{color:var(--color-warning-fg);font-size:11.5px;font-weight:600;}
@@ -1701,7 +1705,7 @@ function invTableRows(){
   if(q){
     const tokens=q.split(/[,\s]+/).filter(t=>t);
     rows=rows.filter(r=>{
-      const fields=[r.code,r.name,r.model,r.brand,r.category,r.gender].map(v=>String(v).toLowerCase());
+      const fields=[r.code,r.name,r.model,r.brand,r.category,r.gender,r.edp].map(v=>String(v).toLowerCase());   // [2026-10-27] EDP넘버로도 검색
       // [2026-10-27] 여러 단어 = 하나라도 포함되면 표시 (예: "931 647" → BJM931과 BJM647 모두). 전에는 모두 포함해야 해서 결과가 0건이 됐음
       return tokens.some(t=>fields.some(f=>f.includes(t)));
     });
@@ -1826,7 +1830,7 @@ function renderBjTable(){
       if(urgent) urgentCnt++;
       if(review) reviewCnt++;
       const ratio=gSold>0 ? Math.round(r.cumQty/gSold*1000)/10+'%' : '-';
-      exportRows.push({brand:g.brand, model:g.model, color:g.color, code:r.code, size:r.size, inQty:r.inQty, sold:r.cumQty,
+      exportRows.push({brand:g.brand, model:g.model, color:g.color, code:r.code, name:r.name, edp:r.edp, size:r.size, inQty:r.inQty, sold:r.cumQty,
         ratio: gSold>0 ? r.cumQty/gSold : null, stock:r.stock, needQty, po:poQty(r), days:R.days, need, urgent, review, stop});
       const r1=v=>Math.round(v*10)/10;
       const P=r.orderParams||DEFAULT_ORDER_PARAMS;
@@ -2137,6 +2141,29 @@ document.getElementById('bj-tbody').addEventListener('click',e=>{
   const imCell=e.target.closest('td.bj-img'); const im=imCell && imCell.querySelector('img');
   if(im){ document.getElementById('bj-zoomImg').src=im.src; document.getElementById('bj-zoomCap').textContent=im.alt+' · 클릭하거나 Esc로 닫기'; document.getElementById('bj-zoom').style.display='flex'; return; }
   });   // 상품코드 클릭은 아래 문서 전체 처리기가 맡음
+/* [2026-10-27] 재고표 상품코드에 마우스를 올리면 EDP넘버 상자가 뜸. 상자 안 글자는 드래그로 복사할 수 있고 [복사] 버튼도 있음.
+   상자로 마우스를 옮겨도 닫히지 않도록 잠깐(0.25초) 기다렸다 닫음 */
+(function(){
+  const tip=document.createElement('div'); tip.id='bj-edpTip'; tip.style.display='none'; document.body.appendChild(tip);
+  let hideT=null;
+  const hide=()=>{ hideT=setTimeout(()=>{ tip.style.display='none'; },250); };
+  const keep=()=>{ clearTimeout(hideT); };
+  document.getElementById('bj-tbody').addEventListener('mouseover',e=>{
+    const a=e.target.closest('a.bj-code'); if(!a) return;
+    const it=state.invByCode&&state.invByCode[a.dataset.code]; const edp=it&&String(it.edp||'').trim();
+    keep();
+    tip.innerHTML=`<span class="l">EDP</span><span class="v">${edp?escAttr(edp):'없음'}</span>`+(edp?'<button type="button">복사</button>':'');
+    const b=tip.querySelector('button');
+    if(b) b.onclick=()=>{ const done=()=>{ b.textContent='복사됨'; setTimeout(()=>{ b.textContent='복사'; },1200); };
+      if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(edp).then(done,()=>{});
+      else { const r=document.createRange(); r.selectNodeContents(tip.querySelector('.v')); const s=getSelection(); s.removeAllRanges(); s.addRange(r); try{ document.execCommand('copy'); done(); }catch(err){} } };
+    const rc=a.getBoundingClientRect();
+    tip.style.display='flex'; tip.style.left=Math.round(rc.left)+'px'; tip.style.top=Math.round(rc.bottom+4)+'px';
+  });
+  document.getElementById('bj-tbody').addEventListener('mouseout',e=>{ if(e.target.closest('a.bj-code')) hide(); });
+  tip.addEventListener('mouseenter',keep); tip.addEventListener('mouseleave',hide);
+  document.addEventListener('scroll',()=>{ tip.style.display='none'; },true);
+})();
 /* [2026-10-27] 모든 화면의 상품코드 → 상세 판매현황. 재고에 있는 코드만 링크로 만들고, 클릭은 문서 전체에서 한 번에 받음 */
 function codeLink(code){
   const c=String(code==null?'':code);
@@ -2150,22 +2177,102 @@ document.getElementById('bj-zoom').addEventListener('click',()=>{ document.getEl
 document.getElementById('bj-exportBtn').addEventListener('click',()=>{
   const rows=state.bjExportRows||[];
   const fd=d=>d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'날짜 미정';
-  const header=['브랜드','모델','색상','상품코드','사이즈','누적입고수량','누적판매수량','누적판매비율','현재고','발주필요수량','입고예정수량','입고예정 상세(차수·예정일·수량·상태·비고)','보유일수','발주필요'];
+  // [2026-10-27] 상품명·EDP넘버 추가, 머리글 색·필터·틀고정 (SheetJS 무료판은 칸 색을 못 써서 bjXlsx로 직접 만듦)
+  const cols=[{h:'브랜드',w:11},{h:'모델',w:12},{h:'색상',w:11},{h:'상품코드',w:20},{h:'상품명',w:40},{h:'EDP넘버',w:18},{h:'사이즈',w:7,al:'c'},
+    {h:'누적입고수량',w:11,t:'n'},{h:'누적판매수량',w:11,t:'n'},{h:'누적판매비율',w:11,t:'p'},{h:'현재고',w:8,t:'n'},{h:'발주필요수량',w:11,t:'n'},{h:'입고예정수량',w:11,t:'n'},
+    {h:'입고예정 상세(차수·예정일·수량·상태·비고)',w:48},{h:'보유일수',w:9,t:'n'},{h:'발주필요',w:18}];
   const data=rows.map(r=>{
     const lines=(state.poLines&&state.poLines[r.code])||[];
     const detail=lines.map((l,i)=>`${i+1}차 ${fd(l.date)} ${l.qty}개 ${l.status||''}${l.note?' ('+l.note+')':''}`.trim()).join(' / ');
-    return [r.brand, r.model, r.color, r.code, r.size, r.inQty, r.sold, r.ratio, r.stock, r.needQty||null, r.po||null, detail, (r.stop||!isFinite(r.days))?null:Math.round(r.days), r.stop?r.stop:(r.urgent?'발주필요(결품 예상)':(r.need?'발주필요':(r.review?'발주검토':'')))];
+    return [r.brand, r.model, r.color, r.code, r.name, r.edp, r.size, r.inQty, r.sold, r.ratio, r.stock, r.needQty||null, r.po||null, detail, (r.stop||!isFinite(r.days))?null:Math.round(r.days), r.stop?r.stop:(r.urgent?'발주필요(결품 예상)':(r.need?'발주필요':(r.review?'발주검토':'')))];
   });
-  const ws=XLSX.utils.aoa_to_sheet([header,...data]);
-  for(let i=0;i<data.length;i++){ const c=ws[XLSX.utils.encode_cell({r:i+1,c:7})]; if(c && typeof c.v==='number') c.z='0.0%'; }
-  ws['!cols']=[{wch:10},{wch:12},{wch:10},{wch:22},{wch:7},{wch:11},{wch:11},{wch:11},{wch:8},{wch:11},{wch:11},{wch:48},{wch:9},{wch:16}];
-  ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:data.length,c:header.length-1}})};
-  const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,'재고표');
   const now=new Date();
   const ymd=now.getFullYear()+String(now.getMonth()+1).padStart(2,'0')+String(now.getDate()).padStart(2,'0');
-  XLSX.writeFile(wb, `재고표_${ymd}.xlsx`);
+  bjXlsx(`재고표_${ymd}.xlsx`, '재고표', cols, data);
 });
+/* [2026-10-27] .xlsx 직접 만들기 (쿠팡 대시보드 dlXlsx와 같은 방식: 압축 없는 zip + 시트 XML)
+   머리글 = 굵게 + 회색 바탕, 1행 틀고정, 머리글 필터, 얇은 테두리.
+   cols = [{h:머리글, w:폭, t:'n'(숫자)|'p'(비율)|없음(글자), al:'c'}], data = [[값…]] */
+function bjXlsx(fileName, sheetName, cols, data){
+  const X=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const colL=n=>{ let s=''; n++; while(n){ const m=(n-1)%26; s=String.fromCharCode(65+m)+s; n=Math.floor((n-1)/26); } return s; };
+  // 서식 번호: 0 기본 · 1 머리글 · 2 글자왼 · 3 글자가운데 · 4 숫자 · 5 비율
+  const xf=(font,fill,al,num)=>`<xf numFmtId="${num}" fontId="${font}" fillId="${fill}" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"${num?' applyNumberFormat="1"':''} applyAlignment="1"><alignment horizontal="${al}" vertical="center"/></xf>`;
+  const xfs=['<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>', xf(1,2,'center',0), xf(0,0,'left',0), xf(0,0,'center',0), xf(0,0,'right',164), xf(0,0,'right',165)];
+  const styles=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<numFmts count="2"><numFmt numFmtId="164" formatCode="#,##0"/><numFmt numFmtId="165" formatCode="0.0%"/></numFmts>
+<fonts count="2"><font><sz val="10"/><name val="맑은 고딕"/><family val="3"/><charset val="129"/></font><font><b/><sz val="10"/><name val="맑은 고딕"/><family val="3"/><charset val="129"/></font></fonts>
+<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFD9D9D9"/><bgColor indexed="64"/></patternFill></fill></fills>
+<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>
+<border><left style="thin"><color rgb="FFBFBFBF"/></left><right style="thin"><color rgb="FFBFBFBF"/></right><top style="thin"><color rgb="FFBFBFBF"/></top><bottom style="thin"><color rgb="FFBFBFBF"/></bottom><diagonal/></border></borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="${xfs.length}">${xfs.join('')}</cellXfs>
+<cellStyles count="1"><cellStyle name="표준" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+  const nC=cols.length, last=data.length+1, lc=colL(nC-1);
+  let sd=`<row r="1" ht="20" customHeight="1">`+cols.map((c,j)=>`<c r="${colL(j)}1" t="inlineStr" s="1"><is><t>${X(c.h)}</t></is></c>`).join('')+'</row>';
+  data.forEach((v,ri)=>{
+    const R=ri+2;
+    sd+=`<row r="${R}">`+cols.map((c,j)=>{
+      const x=v[j], ref=colL(j)+R;
+      if((c.t==='n'||c.t==='p') && typeof x==='number' && isFinite(x)) return `<c r="${ref}" s="${c.t==='p'?5:4}"><v>${x}</v></c>`;
+      return `<c r="${ref}" t="inlineStr" s="${c.al==='c'?3:2}"><is><t xml:space="preserve">${X(x)}</t></is></c>`;
+    }).join('')+'</row>';
+  });
+  const sheet=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<dimension ref="A1:${lc}${last}"/>
+<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
+<sheetFormatPr defaultRowHeight="16.5"/>
+<cols>${cols.map((c,j)=>`<col min="${j+1}" max="${j+1}" width="${c.w||12}" customWidth="1"/>`).join('')}</cols>
+<sheetData>${sd}</sheetData><autoFilter ref="A1:${lc}${last}"/>
+<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/></worksheet>`;
+  const sn=X(String(sheetName).replace(/[\\\/\?\*\[\]:]/g,' ').slice(0,31));
+  const files={
+    '[Content_Types].xml':`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`,
+    '_rels/.rels':`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
+    'xl/workbook.xml':`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${sn}" sheetId="1" r:id="rId1"/></sheets>
+<definedNames><definedName name="_xlnm._FilterDatabase" localSheetId="0" hidden="1">'${sn}'!$A$1:$${lc}$${last}</definedName></definedNames></workbook>`,
+    'xl/_rels/workbook.xml.rels':`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
+    'xl/styles.xml':styles,
+    'xl/worksheets/sheet1.xml':sheet
+  };
+  const enc=new TextEncoder();
+  const CRC=bjXlsx.crc||(bjXlsx.crc=(()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=c&1?0xEDB88320^(c>>>1):c>>>1; t[n]=c>>>0; } return t; })());
+  const crc32=b=>{ let c=0xFFFFFFFF; for(let i=0;i<b.length;i++) c=CRC[(c^b[i])&255]^(c>>>8); return (c^0xFFFFFFFF)>>>0; };
+  const d=new Date(), dosT=(d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1), dosD=((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate();
+  const parts=[], central=[]; let off=0;
+  Object.keys(files).forEach(name=>{
+    const nb=enc.encode(name), body=enc.encode(files[name]), crc=crc32(body);
+    const h=new DataView(new ArrayBuffer(30));
+    h.setUint32(0,0x04034b50,true); h.setUint16(4,20,true); h.setUint16(6,0x0800,true); h.setUint16(8,0,true);
+    h.setUint16(10,dosT,true); h.setUint16(12,dosD,true); h.setUint32(14,crc,true);
+    h.setUint32(18,body.length,true); h.setUint32(22,body.length,true); h.setUint16(26,nb.length,true); h.setUint16(28,0,true);
+    parts.push(new Uint8Array(h.buffer), nb, body);
+    const c=new DataView(new ArrayBuffer(46));
+    c.setUint32(0,0x02014b50,true); c.setUint16(4,20,true); c.setUint16(6,20,true); c.setUint16(8,0x0800,true); c.setUint16(10,0,true);
+    c.setUint16(12,dosT,true); c.setUint16(14,dosD,true); c.setUint32(16,crc,true);
+    c.setUint32(20,body.length,true); c.setUint32(24,body.length,true); c.setUint16(28,nb.length,true);
+    c.setUint32(42,off,true);
+    central.push(new Uint8Array(c.buffer), nb);
+    off+=30+nb.length+body.length;
+  });
+  const cSize=central.reduce((a,b)=>a+b.length,0);
+  const e=new DataView(new ArrayBuffer(22));
+  e.setUint32(0,0x06054b50,true); e.setUint16(8,Object.keys(files).length,true); e.setUint16(10,Object.keys(files).length,true);
+  e.setUint32(12,cSize,true); e.setUint32(16,off,true);
+  const blob=new Blob([...parts,...central,new Uint8Array(e.buffer)],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=fileName;
+  document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1500);
+}
 
 /* [2026-10-15] 입고예정수량 마우스 오버 → 차수별 입고예정일·수량·상태·비고 */
 const bjPoTip=document.createElement('div'); bjPoTip.id='bj-poTip'; bjPoTip.style.display='none'; document.body.appendChild(bjPoTip);
