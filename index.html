@@ -729,7 +729,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
       <section class="section card" id="bj-card" style="display:none;">
         <div class="table-head">
           <h3>재고표</h3>
-          <div class="search"><span class="ic">🔍</span><input type="text" id="i-searchBox" placeholder="여러 단어 검색 가능 (예: BJM931 안전화) — 모두 만족하는 행만 표시" /></div>
+          <div class="search"><span class="ic">🔍</span><input type="text" id="i-searchBox" placeholder="여러 단어는 띄어쓰기 (예: 931 647) — 하나라도 포함된 상품 표시" /></div>
           <button class="btn-file" id="bj-exportBtn">엑셀로 내려받기</button>
           <span class="bj-review-ctl" style="color:var(--text-tertiary)">바오지 기준 :</span>
           <!-- [2026-10-21 검토사본] 새 발주 규칙: 보유일수 = (현재고+입고예정) ÷ 하루판매 -->
@@ -1701,7 +1701,8 @@ function invTableRows(){
     const tokens=q.split(/[,\s]+/).filter(t=>t);
     rows=rows.filter(r=>{
       const fields=[r.code,r.name,r.model,r.brand,r.category,r.gender].map(v=>String(v).toLowerCase());
-      return tokens.every(t=>fields.some(f=>f.includes(t)));
+      // [2026-10-27] 여러 단어 = 하나라도 포함되면 표시 (예: "931 647" → BJM931과 BJM647 모두). 전에는 모두 포함해야 해서 결과가 0건이 됐음
+      return tokens.some(t=>fields.some(f=>f.includes(t)));
     });
   }
   const {col,dir}=state.invSort;
@@ -1781,8 +1782,13 @@ function renderBjTable(){
   const rows=state.inv.filter(r=>picked.has(r) && !(hideStop && r.saleStatus));
   // [2026-10-27] 전체 브랜드일 때는 숨기고, 브랜드를 하나 골랐을 때만 보여 줌
   const oneBrand = state.invFilters.brand && state.invFilters.brand!=='ALL';
-  card.style.display = (oneBrand && (rows.length||stopAll)) ? '' : 'none';
-  if(!oneBrand || !rows.length){ document.getElementById('bj-tbody').innerHTML=''; state.bjExportRows=[]; return; }
+  // 검색 중이면 결과가 0건이어도 표를 숨기지 않음 (검색칸이 이 표 안에 있어서 같이 사라지던 문제)
+  const searching = !!String(state.invSearch||'').trim();
+  card.style.display = (oneBrand && (rows.length||stopAll||searching)) ? '' : 'none';
+  if(!oneBrand || !rows.length){
+    document.getElementById('bj-tbody').innerHTML = (oneBrand&&searching) ? '<tr><td colspan="12" style="text-align:center;padding:30px;color:var(--text-tertiary)">검색 결과가 없습니다.</td></tr>' : '';
+    if(oneBrand&&searching) document.getElementById('bj-rowCount').textContent='0건';
+    state.bjExportRows=[]; return; }
   const groups=[], byKey={};
   rows.forEach(r=>{
     // 모델명이 비어 있으면 상품코드 앞부분(예: BJ5112-BG10 → BJ5112)을 모델로 씀. 브랜드가 달라도 섞이지 않게 브랜드까지 묶음 기준에 넣음
