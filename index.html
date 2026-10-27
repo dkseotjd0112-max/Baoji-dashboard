@@ -275,6 +275,7 @@ tbody tr.need td{background:rgba(212,47,82,.08);}
 /* [2026-10-16] 이미지 칸 넓힘(120→152px), 모델 칸은 내용 폭만큼만, 글씨 1pt 작게(본문 12.5→11.5px, 머리글 11.5→10.5px) */
 #bj-table td.bj-img{width:180px;}   /* [2026-10-16] 가로로 더 넓힘: 썸네일 140→168px */
 #bj-table thead th{line-height:1.25;vertical-align:middle;}   /* 긴 항목명은 두 줄로 */
+#bj-table thead th{z-index:3;}   /* [2026-10-27] 스크롤 시 이미지(position:relative)가 고정 머리글 위로 올라오던 문제 */
 #bj-table thead th.num, #bj-table tbody td.num{padding-left:8px;padding-right:8px;}   /* 숫자 칸 좌우 여백 12→8px */
 #bj-table th.bj-col-model, #bj-table td.bj-model{width:1%;padding-left:10px;padding-right:10px;}
 #bj-table{font-size:11.5px;}
