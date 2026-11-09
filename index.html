@@ -703,7 +703,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
         <!-- 브랜드는 왼쪽 사이드바로 옮겼습니다(전체 탭 공통). 아래 select는 화면에는 안 보이지만
              기존 필터/즐겨찾기/내보내기 코드가 그대로 참조하므로 DOM에는 남겨 둡니다. -->
         <div class="fl" style="display:none;"><label>브랜드</label><select id="i-brand"></select></div>
-        <div class="fl"><label>카테고리</label><select id="i-category"></select></div>
+        <div class="fl"><label>카테고리</label><div class="msel" id="i-category"></div></div>
         <div class="fl"><label>모델명</label><div class="msel" id="i-model"></div></div>
         <div class="fl"><label>성별</label><div class="msel" id="i-gender"></div></div>
         <div class="chk"><input type="checkbox" id="i-onlyNeed" /><label for="i-onlyNeed">발주필요만 보기</label></div>
@@ -814,7 +814,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
         <div class="filters-break"></div>
         <!-- 브랜드는 왼쪽 사이드바로 이동(전체 탭 공통). 아래 select는 숨김 상태로 유지합니다. -->
         <div class="fl" style="display:none;"><label>브랜드</label><select id="o-brand"></select></div>
-        <div class="fl"><label>카테고리</label><select id="o-category"></select></div>
+        <div class="fl"><label>카테고리</label><div class="msel" id="o-category"></div></div>
         <div class="fl"><label>모델명</label><div class="msel" id="o-model"></div></div>
         <div class="fl"><label>판매처</label><div class="msel" id="o-channel"></div></div>
         <div class="fl"><label>출고유형</label><div class="msel" id="o-type"></div></div>
@@ -1631,14 +1631,15 @@ function invRowsExcept(excludeKeys){
   const f=state.invFilters;
   return state.inv.filter(r=>
     (excludeKeys.includes('brand')||f.brand==='ALL'||r.brand===f.brand) &&
-    (excludeKeys.includes('category')||f.category==='ALL'||r.category===f.category) &&
+    (excludeKeys.includes('category')||msMatchOpts(f.category,r.category)) &&
     (excludeKeys.includes('model')||msMatchOpts(f.model,r.model)) &&
     (excludeKeys.includes('gender')||msMatchOpts(f.gender,r.gender)) &&
     (!f.onlyNeed || r.needOrder));
 }
 function buildInvFilters(){
   fillSelect('i-brand',uniq(invRowsExcept(['brand']),'brand').sort(),state.invFilters.brand,'전체 브랜드');
-  fillSelect('i-category',uniq(invRowsExcept(['category']),'category').sort(),state.invFilters.category,'전체 카테고리');
+  // [2026-11-09] 카테고리도 모델명·성별처럼 체크박스(여러 개 선택)
+  buildMultiSelect('i-category',state.invFilters,'category',uniq(invRowsExcept(['category']),'category').sort(),'전체 카테고리',()=>{buildInvFilters();renderInv();});
   buildMultiSelect('i-model',state.invFilters,'model',uniq(invRowsExcept(['model']),'model').sort(),'전체 모델명',()=>{buildInvFilters();renderInv();});
   buildMultiSelect('i-gender',state.invFilters,'gender',uniq(invRowsExcept(['gender']),'gender').sort(),'전체 성별',()=>{buildInvFilters();renderInv();});
   document.getElementById('i-onlyNeed').checked = state.invFilters.onlyNeed;
@@ -1647,12 +1648,12 @@ function invFilteredRows(){
   const f=state.invFilters;
   return state.inv.filter(r=>
     (f.brand==='ALL'||r.brand===f.brand) &&
-    (f.category==='ALL'||r.category===f.category) &&
+    msMatch(f.category,r.category) &&
     msMatch(f.model,r.model) && msMatch(f.gender,r.gender) &&
     (!f.onlyNeed || r.needOrder));
 }
 function renderInv(){
-  renderFilterWarn('i', state.invFilters, {model:'모델명', gender:'성별'}, buildInvFilters, renderInv);
+  renderFilterWarn('i', state.invFilters, {category:'카테고리', model:'모델명', gender:'성별'}, buildInvFilters, renderInv);
   renderInvKPI(); renderInvCat(); renderInvTop(); renderInvTable();
 }
 
@@ -1680,7 +1681,7 @@ function renderInvCat(){
   const labels=Object.keys(g).sort((a,b)=>g[b]-g[a]);
   mk('i-ch-cat',{type:'doughnut',data:{labels,datasets:[{data:labels.map(l=>g[l]),backgroundColor:PALETTE,borderColor:'#FFFFFF',borderWidth:2,hoverOffset:6}]},
     options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
-      onClick:(e,el)=>{if(el.length){document.getElementById('i-category').value=labels[el[0].index];state.invFilters.category=labels[el[0].index];renderInv();}},
+      onClick:(e,el)=>{if(el.length){state.invFilters.category=[labels[el[0].index]];state.openMsel=null;buildInvFilters();renderInv();}},
       plugins:{legend:{position:'right',labels:{boxWidth:11,boxHeight:11,padding:10}},
         tooltip:{...tip,callbacks:{label:c=>{const t=c.dataset.data.reduce((a,b)=>a+b,0);return ` ${c.label}: ${fmtNum(c.parsed)}개 (${(c.parsed/t*100).toFixed(1)}%)`;}}}}}});
 }
@@ -2299,7 +2300,7 @@ document.getElementById('bjd-overlay').addEventListener('click',e=>{ if(e.target
 document.addEventListener('keydown',e=>{ if(e.key==='Escape' && BJD.code) closeBjDetail(); });
 document.getElementById('bjd-period').addEventListener('click',e=>{ const b=e.target.closest('button[data-w]'); if(!b) return; BJD.weeks=Number(b.dataset.w); renderBjDetail(); });
 
-['brand','category'].forEach(k=>{
+['brand'].forEach(k=>{   // [2026-11-09] 카테고리는 체크박스로 바뀌어 buildMultiSelect가 처리
   document.getElementById('i-'+k).addEventListener('change',e=>{state.invFilters[k]=e.target.value;buildInvFilters();renderInv();});
 });
 document.getElementById('i-onlyNeed').addEventListener('change',e=>{state.invFilters.onlyNeed=e.target.checked;buildInvFilters();renderInv();});
@@ -2314,6 +2315,8 @@ setupFavControls('i',
   ()=>({filters:{...state.invFilters}, search:state.invSearch}),
   (saved)=>{ state.invFilters={...saved.filters}; state.invSearch=saved.search||''; document.getElementById('i-searchBox').value=state.invSearch;
     ['category','model','gender'].forEach(k=>{ if(state.invFilters[k]===undefined) state.invFilters[k]='ALL'; });
+    // [2026-11-09] 예전 즐겨찾기는 카테고리를 글자 하나로 저장 → 체크박스용 목록으로 바꿈
+    if(typeof state.invFilters.category==='string' && state.invFilters.category!=='ALL') state.invFilters.category=[state.invFilters.category];
     // 예전에 저장해 둔 즐겨찾기에도 브랜드가 들어 있지만, 브랜드는 이제 사이드바가 주인이라
     // 즐겨찾기를 불러와도 사이드바에 보이는 브랜드가 그대로 유지되도록 덮어씁니다
     // (그러지 않으면 사이드바는 '전체'인데 표만 특정 브랜드로 바뀌어 원인을 찾기 어려워집니다).
@@ -2394,7 +2397,7 @@ function ordRowsExcept(excludeKeys){
   return state.ord.filter(r=>
     (!pFrom||r.date>=pFrom) && (!pTo||r.date<=pTo) &&
     (excludeKeys.includes('brand')||f.brand==='ALL'||r.brand===f.brand) &&
-    (excludeKeys.includes('category')||f.category==='ALL'||r.category===f.category) &&
+    (excludeKeys.includes('category')||msMatchOpts(f.category,r.category)) &&
     (excludeKeys.includes('model')||msMatchOpts(f.model,r.model)) &&
     (excludeKeys.includes('channel')||msMatchOpts(f.channel,r.channel)) &&
     (excludeKeys.includes('type')||msMatchOpts(f.type,r.type)) &&
@@ -2403,7 +2406,7 @@ function ordRowsExcept(excludeKeys){
 }
 function buildOrdFilters(){
   fillSelect('o-brand',uniq(ordRowsExcept(['brand']),'brand').sort(),state.ordFilters.brand,'전체 브랜드');
-  fillSelect('o-category',uniq(ordRowsExcept(['category']),'category').sort(),state.ordFilters.category,'전체 카테고리');
+  buildMultiSelect('o-category',state.ordFilters,'category',uniq(ordRowsExcept(['category']),'category').sort(),'전체 카테고리',()=>{clearOrdDrillSilent();buildOrdFilters();renderOrd();});   // [2026-11-09] 체크박스
   buildMultiSelect('o-model',state.ordFilters,'model',uniq(ordRowsExcept(['model']),'model').sort(),'전체 모델명',()=>{clearOrdDrillSilent();buildOrdFilters();renderOrd();});
   buildMultiSelect('o-channel',state.ordFilters,'channel',uniq(ordRowsExcept(['channel']),'channel').sort(),'전체 판매처',()=>{clearOrdDrillSilent();buildOrdFilters();renderOrd();});
   buildMultiSelect('o-type',state.ordFilters,'type',uniq(ordRowsExcept(['type']),'type').sort(),'전체 유형',()=>{clearOrdDrillSilent();buildOrdFilters();renderOrd();});
@@ -2419,7 +2422,7 @@ function ordRowsInRange(pFrom,pTo){
   return state.ord.filter(r=>
     (!pFrom||r.date>=pFrom) && (!pTo||r.date<=pTo) &&
     (f.brand==='ALL'||r.brand===f.brand) &&
-    (f.category==='ALL'||r.category===f.category) && msMatch(f.model,r.model) &&
+    msMatch(f.category,r.category) && msMatch(f.model,r.model) &&
     msMatch(f.channel,r.channel) && msMatch(f.type,r.type) &&
     msMatch(f.size,r.size) && msMatch(f.gender,r.gender) &&
     ordSearchMatch(r));
@@ -2477,7 +2480,7 @@ function calcDelta(cur, prev, comparable){
 }
 
 function renderOrd(){
-  renderFilterWarn('o', state.ordFilters, {model:'모델명', channel:'판매처', type:'출고유형', gender:'성별', size:'사이즈'},
+  renderFilterWarn('o', state.ordFilters, {category:'카테고리', model:'모델명', channel:'판매처', type:'출고유형', gender:'성별', size:'사이즈'},
                    ()=>{ clearOrdDrillSilent(); buildOrdFilters(); }, renderOrd);
   // 카드 표시/숨김을 먼저 정해야 숨은 카드를 헛되이 그리지 않습니다
   layoutOrdChartRow();
@@ -3092,9 +3095,7 @@ function applyOrdChartFilter(field, value){
     state.ordPeriod = same ? {preset:'last1m',from:'',to:''} : {preset:'custom',from:from,to:to};
     document.getElementById('o-dateFrom').value=state.ordPeriod.from||'';
     document.getElementById('o-dateTo').value=state.ordPeriod.to||'';
-  }else if(field==='category'){
-    f.category = (f.category===value) ? 'ALL' : value;   // 카테고리는 단일선택 select
-  }else{
+  }else{   // [2026-11-09] 카테고리도 체크박스라 다른 필터와 같은 방식
     const cur=f[field];
     const onlyThis = Array.isArray(cur) && cur.length===1 && cur[0]===value;
     f[field] = onlyThis ? 'ALL' : [value];
@@ -3113,8 +3114,7 @@ function renderOrdActiveChips(){
   if(state.ordPeriod.preset==='custom' && (state.ordPeriod.from||state.ordPeriod.to)){
     items.push({k:'__period', t:'기간', v:(state.ordPeriod.from||'')+(state.ordPeriod.to&&state.ordPeriod.to!==state.ordPeriod.from?' ~ '+state.ordPeriod.to:'')});
   }
-  if(f.category && f.category!=='ALL') items.push({k:'category', t:'카테고리', v:f.category});
-  ['model','channel','type','size','gender'].forEach(k=>{
+  ['category','model','channel','type','size','gender'].forEach(k=>{
     const v=f[k];
     if(Array.isArray(v) && v.length>0) items.push({k, t:OFILTER_LABEL[k], v: v.length<=2 ? v.join(', ') : v.length+'개 선택'});
   });
@@ -3201,7 +3201,7 @@ function renderOrdTable(){
   document.getElementById('o-rowCount').textContent = `${fmtNum(rows.length)}건`+(rows.length>MAX?` (상위 ${MAX}건 표시)`:'');
 }
 
-['brand','category'].forEach(k=>{
+['brand'].forEach(k=>{   // [2026-11-09] 카테고리는 체크박스로 바뀌어 buildMultiSelect가 처리
   document.getElementById('o-'+k).addEventListener('change',e=>{state.ordFilters[k]=e.target.value;clearOrdDrillSilent();buildOrdFilters();renderOrd();});
 });
 function clearOrdDrillSilent(){ /* 드릴다운 제거됨 - 호출부 호환용 빈 함수 */ }
@@ -3259,6 +3259,8 @@ setupFavControls('o',
     ['category','model','channel','type','size','gender'].forEach(k=>{
       if(state.ordFilters[k]===undefined) state.ordFilters[k]='ALL';
     });
+    // [2026-11-09] 예전 즐겨찾기는 카테고리를 글자 하나로 저장 → 체크박스용 목록으로 바꿈
+    if(typeof state.ordFilters.category==='string' && state.ordFilters.category!=='ALL') state.ordFilters.category=[state.ordFilters.category];
     state.ordPeriod = saved.period ? {...saved.period} : {preset:'last1m',from:'',to:''};
     document.getElementById('o-dateFrom').value=state.ordPeriod.from||''; document.getElementById('o-dateTo').value=state.ordPeriod.to||'';
     clearOrdDrillSilent();
