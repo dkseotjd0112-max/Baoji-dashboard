@@ -735,7 +735,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
       <section class="section card" id="bj-card" style="display:none;">
         <div class="table-head">
           <h3>재고표</h3>
-          <div class="search"><span class="ic">🔍</span><input type="text" id="i-searchBox" placeholder="여러 단어는 띄어쓰기 — 모두 포함된 상품 우선, 없으면 하나라도 포함 (예: 애견 S사이즈 / 931 647)" /></div>
+          <div class="search"><span class="ic">🔍</span><input type="text" id="i-searchBox" placeholder="쉼표(,)로 조건 나누기 — 예: 오토,베이지,카키 (오토 중 베이지·카키) / 931,647" title="종류가 다른 조건(모델·색상·사이즈 등)은 모두 만족, 같은 종류끼리는 하나라도 맞으면 표시" /></div>
           <button class="btn-file" id="bj-exportBtn">엑셀로 내려받기</button>
           <span class="bj-review-ctl" style="color:var(--text-tertiary)">바오지 기준 :</span>
           <!-- [2026-10-21 검토사본] 새 발주 규칙: 보유일수 = (현재고+입고예정) ÷ 하루판매 -->
@@ -1706,13 +1706,27 @@ function invTableRows(){
   let rows=invFilteredRows();
   const q=state.invSearch.trim().toLowerCase();
   if(q){
-    const tokens=q.split(/[,\s]+/).filter(t=>t);
-    // [2026-11-18] 여러 단어 검색: 먼저 '모두 포함'으로 찾고(예: "애견 S사이즈" → S사이즈 애견텐트만),
-    //   그런 상품이 하나도 없으면 '하나라도 포함'으로 다시 찾음(예: "931 647" → BJM931과 DPM647 모두)
-    const fieldsOf=r=>[r.code,r.name,r.model,r.brand,r.category,r.gender,r.edp,r.color].map(v=>String(v==null?'':v).toLowerCase());   // EDP넘버·색상으로도 검색
-    const hit=(r,t)=>fieldsOf(r).some(f=>f.includes(t));
-    const all=rows.filter(r=>tokens.every(t=>hit(r,t)));
-    rows = all.length ? all : rows.filter(r=>tokens.some(t=>hit(r,t)));
+    /* [2026-11-18] 검색 규칙 (사용자 확정): 쉼표(,)로 조건을 나눔
+       - 단어마다 종류(색상·사이즈·모델·상품코드·카테고리·성별·EDP·상품명·브랜드)를 정함 — 그 단어가 처음 들어맞는 종류
+       - 종류가 다르면 '모두 만족', 같은 종류끼리는 '하나라도'
+         예) 오토,베이지      → 오토 중 베이지
+             오토,베이지,카키 → 오토 중 베이지 또는 카키
+             931,647          → BJM931과 DPM647 (둘 다 모델)
+       - 쉼표 없이 띄어쓴 단어는 모두 들어 있어야 함 (예: 오토 베이지 = 오토 중 베이지) */
+    const KINDS=[['color',r=>r.color],['size',r=>r.size],['model',r=>r.model],['code',r=>r.code],['category',r=>r.category],
+                 ['gender',r=>r.gender],['edp',r=>r.edp],['name',r=>r.name],['brand',r=>r.brand]];
+    const val=(r,f)=>String(f(r)==null?'':f(r)).toLowerCase();
+    const anyField=(r,t)=>KINDS.some(([,f])=>val(r,f).includes(t));
+    const parts=q.split(',').map(s=>s.trim()).filter(Boolean);
+    const groups={};
+    parts.forEach((p,i)=>{
+      const words=p.split(/\s+/).filter(Boolean);
+      if(words.length>1){ groups['phrase'+i]=[r=>words.every(w=>anyField(r,w))]; return; }
+      const k=KINDS.find(([,f])=>rows.some(r=>val(r,f).includes(p)));
+      const key=k?k[0]:'none'+i;
+      (groups[key]=groups[key]||[]).push(k ? (r=>val(r,k[1]).includes(p)) : (()=>false));
+    });
+    rows=rows.filter(r=>Object.values(groups).every(tests=>tests.some(fn=>fn(r))));
   }
   const {col,dir}=state.invSort;
   rows=rows.slice().sort((a,b)=>{let x=a[col],y=b[col];
