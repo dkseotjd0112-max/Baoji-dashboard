@@ -740,7 +740,8 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
           <!-- [2026-10-21 검토사본] 새 발주 규칙: 보유일수 = (현재고+입고예정) ÷ 하루판매 -->
           <label class="bj-review-ctl" for="bj-needDays" title="보유일수가 이 값 미만이면 발주필요">발주필요 &lt;<input type="number" id="bj-needDays" min="1" max="365" step="5" value="60">일</label>
           <label class="bj-review-ctl" for="bj-reviewDays" title="보유일수가 발주필요 기준 이상 ~ 이 값 미만이면 발주검토 (수량은 표시하지 않음)">발주검토 &lt;<input type="number" id="bj-reviewDays" min="0" max="365" step="5" value="90">일</label>
-          <label class="bj-review-ctl" for="bj-targetDays" title="발주필요수량 = 하루판매 × 이 일수 (반올림)">발주량 = 하루판매 ×<input type="number" id="bj-targetDays" min="1" max="365" step="5" value="50">일</label>
+          <!-- [2026-11-18] 목표 보유일수(리드타임 포함). 발주필요수량 = 하루판매 × 목표 − 보유 -->
+          <label class="bj-review-ctl" for="bj-goalDays" title="발주필요수량 = 하루판매 × 목표 보유일수 − 보유(현재고+입고예정), 반올림. 목표는 리드타임까지 생각한 일수">목표 보유<input type="number" id="bj-goalDays" min="1" max="365" step="5" value="90">일</label>
           <label class="bj-review-ctl" for="bj-hideStop" title="vol5 마스터테이블 판매상태가 단종·공급불가인 SKU를 표에서 숨깁니다"><input type="checkbox" id="bj-hideStop" style="width:auto;">단종·공급불가 숨김</label>
           <span class="row-count" id="bj-rowCount"></span>
         </div>
@@ -1843,7 +1844,7 @@ function renderBjTable(){
         : [ bjdRateText(fr),
             `보유 ${fmtNum(have)}개 (현재고 ${fmtNum(r.stock)} + 입고예정 ${fmtNum(poQty(r))}) ÷ 하루판매 = ${fmtNum(Math.round(R.days))}일치`,
             isBj ? `기준: ${S.need}일 미만 발주필요 · ${S.need}~${S.review}일 발주검토` : `기준: ${P.lead+P.safety}일치 미만 발주필요`,
-            ...(need ? [isBj ? `발주수량 = 하루 ${r2(rate)}개 × ${S.target}일 = ${fmtNum(needQty)}개` : `발주수량 = ${P.lead+P.safety+P.cycle}일치 − 보유 = ${fmtNum(needQty)}개`] : []),
+            ...(need ? [isBj ? `발주수량 = 하루 ${r2(rate)}개 × 목표 ${S.target}일 − 보유 ${fmtNum(have)}개 = ${fmtNum(needQty)}개` : `발주수량 = ${P.lead+P.safety+P.cycle}일치 − 보유 = ${fmtNum(needQty)}개`] : []),
             ...(urgent ? [`결품 예상: 보유일수가 리드타임(${isBj?BJ_LEAD_DAYS:P.lead}일)보다 짧음`] : []),
             ...(review ? [`약 ${R.until}일 뒤 발주필요`] : []) ];
       const tip=` title="${escAttr(tipLines.join('\n'))}"`;
@@ -1869,7 +1870,7 @@ function renderBjTable(){
     // [2026-10-21 검토사본] 긴급은 발주필요에 합치고, 그중 결품 예상 건수만 따로 표시
     `<span class="bj-legend" title="보유일수 ${bjSettings().need}일 미만">발주필요 ${fmtNum(needCnt)}건${urgentCnt?` (결품 예상 ${fmtNum(urgentCnt)})`:''}</span> `+
     (bjSettings().review>bjSettings().need?`<span class="bj-legend bj-legend-review" title="보유일수 ${bjSettings().need}~${bjSettings().review}일">발주검토 ${fmtNum(reviewCnt)}건 · 수량 없음</span>`:'')+
-    `<span class="bj-legend-note">하루판매 = 최근 60일 판매 ÷ 재고 있던 날 (품절일 제외, ${BJD_MIN_STOCK_DAYS}일 미만은 판단 보류) · 보유일수 = (현재고+입고예정) ÷ 하루판매 · 바오지: 발주필요수량 = 하루판매 × ${bjSettings().target}일, 결품 예상 = 보유일수 &lt; 리드타임 ${BJ_LEAD_DAYS}일 · 그 밖의 브랜드: 기존 기준(리드타임 7 + 여유 7일, 수량 = 28일치 − 보유) · 줄에 마우스를 올리면 계산 근거</span>`+
+    `<span class="bj-legend-note">하루판매 = 최근 60일 판매 ÷ 재고 있던 날 (품절일 제외, ${BJD_MIN_STOCK_DAYS}일 미만은 판단 보류) · 보유일수 = (현재고+입고예정) ÷ 하루판매 · 바오지: 발주필요수량 = 하루판매 × 목표 ${bjSettings().target}일 − 보유, 결품 예상 = 보유일수 &lt; 리드타임 ${BJ_LEAD_DAYS}일 · 그 밖의 브랜드: 기존 기준(리드타임 7 + 여유 7일, 수량 = 28일치 − 보유) · 줄에 마우스를 올리면 계산 근거</span>`+
     (stopAll?` <span class="bj-legend bj-legend-stop" title="vol5 마스터테이블 판매상태가 단종·공급불가인 SKU. 발주 판단에서 뺍니다">단종·공급불가 ${fmtNum(stopAll)}건 · 발주 안 함${hideStop?' (숨김)':''}</span>`:'')+
     ` · 모델·색상 ${fmtNum(groups.length)}개 · SKU ${fmtNum(rows.length)}건`;
 }
@@ -1880,10 +1881,11 @@ const BJ_COVER_DAYS = BJ_LEAD_DAYS + BJ_SAFETY_DAYS;   // 발주점 100일 (다�
    - 보유일수 = (현재고 + 입고예정) ÷ 하루판매 (하루판매 = 60일 판매 ÷ 재고 있던 날, bjdForecastRate 참고)
    - 발주필요 : 보유일수 < [발주필요]일 (긴급은 여기에 합침). 그중 보유일수 < 리드타임 50일이면 '결품 예상' 표시
    - 발주검토 : [발주필요] ~ [발주검토]일. 수량은 없고 '약 N일 뒤' (= 발주필요가 되기까지 남은 일수)만 표시
-   - 발주필요수량 = 하루판매 × [발주량]일, 반올림 (발주필요 줄에만)
+   - 발주필요수량 = 하루판매 × [목표 보유]일 − 보유(현재고+입고예정), 반올림 (발주필요 줄에만)
+     [2026-11-18 변경] 전에는 하루판매 × 50일(보유를 빼지 않음). 목표 보유일수는 리드타임까지 생각한 값(사용자 확정)
    입력값 3개는 표 위 입력칸에서 바꾸며, 이 브라우저에만 기억합니다. */
-const BJ_RULE_DEF = {need:60, review:90, target:50};
-const BJ_RULE_KEYS = {need:'bj-needDays', review:'bj-reviewDays', target:'bj-targetDays'};
+const BJ_RULE_DEF = {need:60, review:90, target:90};
+const BJ_RULE_KEYS = {need:'bj-needDays', review:'bj-reviewDays', target:'bj-goalDays'};   // [2026-11-18] 뜻이 바뀌어 칸 이름도 바꿈(예전 50일 기억값이 남지 않게)
 function bjSettings(){
   const o={};
   for(const k in BJ_RULE_KEYS){ const el=document.getElementById(BJ_RULE_KEYS[k]); const v=el?Number(el.value):NaN;
@@ -1898,7 +1900,7 @@ function bjRule(rate, have, stop, S){
   const review= ok && !need && days < S.review;
   return { days, need, review,
     short: need && days < BJ_LEAD_DAYS,
-    qty: need ? Math.max(0, Math.round(rate*S.target)) : 0,
+    qty: need ? Math.max(0, Math.round(rate*S.target - have)) : 0,   // [2026-11-18] 목표 보유까지 채우는 양
     until: review ? Math.max(1, Math.ceil(days - S.need)) : 0 };
 }
 (function(){
