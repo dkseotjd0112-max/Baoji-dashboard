@@ -322,6 +322,7 @@ tbody tr.need td{background:rgba(212,47,82,.08);}
 #bj-edpTip .l{color:var(--text-tertiary);font-weight:600;}
 #bj-edpTip .v{font-weight:700;user-select:all;font-variant-numeric:tabular-nums;}
 #bj-edpTip button{font:600 11px/1 'Pretendard',sans-serif;border:1px solid var(--border-strong);background:transparent;border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--text-secondary);}
+#bj-table .bj-pname{font-size:11px;color:var(--text-secondary);margin-top:1px;white-space:nowrap;}
 #bj-table .bj-brand{font-size:10.5px;font-weight:500;color:var(--text-tertiary);margin-top:2px;}
 #bj-table .bj-mon{color:var(--text-tertiary);font-size:11px;}
 #bj-table .bj-until{color:var(--color-warning-fg);font-size:11.5px;font-weight:600;}
@@ -1816,7 +1817,13 @@ function renderBjTable(){
     g.rows.sort((a,b)=>sizeNum(a.size)-sizeNum(b.size));
     const n=g.rows.length;
     const gSold=g.rows.reduce((a,r)=>a+(r.cumQty||0),0);
+    // [2026-11-18] 컬러가 비어 있으면 상품코드 밑에 상품명을 보여 색을 구분. 같은 묶음끼리 겹치는 앞 단어는 빼서 짧게(예: 라이트베이지)
+    const nmWords=g.rows.filter(x=>!x.color&&x.name).map(x=>String(x.name).trim().split(/\s+/));
+    let pre=0;
+    if(nmWords.length>1){ while(nmWords.every(w=>w.length>pre+1 && w[pre]===nmWords[0][pre])) pre++; }
+    const shortName=r=> (r.color||!r.name) ? '' : String(r.name).trim().split(/\s+/).slice(pre).join(' ');
     g.rows.forEach((r,i)=>{
+      const pname=shortName(r);
       const fr=bjdForecastRate(r.code, today), rate=fr.rate;   // [2026-10-27] 재고 있던 날 기준. 품절·보류는 rate 0
       // [2026-10-21 검토사본] 새 규칙 — bjRule() 참고
       const have=r.stock+poQty(r);
@@ -1854,7 +1861,7 @@ function renderBjTable(){
         (i===0?`<td rowspan="${n}" class="bj-merge bj-img">${g.img?`<div class="bj-crop"><img src="${escAttr(g.img)}" alt="${esc(g.model)} ${esc(g.color)}" loading="lazy"></div>`:''}</td>`+
                `<td rowspan="${n}" class="bj-merge bj-model">${esc(g.model)||'-'}<div class="bj-brand">${esc(g.brand)}</div>${g.rows.some(x=>x.isNewModel)?'<div><span class="bj-new-tag">신규모델</span></div>':''}</td>`+
                `<td rowspan="${n}" class="bj-merge">${esc(g.color)||'-'}</td>`:'')+
-        `<td><a class="bj-code" data-code="${escAttr(r.code)}" href="#">${esc(r.code)}</a></td><td class="num">${esc(r.size)||'-'}${isBj&&BJ_EU[String(r.size).trim()]?`<span class="bj-eu">(${BJ_EU[String(r.size).trim()]})</span>`:''}</td>`+
+        `<td><a class="bj-code" data-code="${escAttr(r.code)}" href="#">${esc(r.code)}</a>${pname?`<div class="bj-pname" title="${escAttr(r.name)}">${esc(pname)}</div>`:''}</td><td class="num">${esc(r.size)||'-'}${isBj&&BJ_EU[String(r.size).trim()]?`<span class="bj-eu">(${BJ_EU[String(r.size).trim()]})</span>`:''}</td>`+
         `<td class="num">${r.inQty==null?'-':fmtNum(r.inQty)}</td><td class="num">${fmtNum(r.cumQty)}</td><td class="num">${ratio}</td>`+
         `<td class="num">${fmtNum(r.stock)}</td>`+
         `<td class="num${needQty>0?' bj-needqty':''}">${stop?`<span class="bj-stop-tag">${stop}</span>`:''}${urgent?'<span class="bj-urgent-tag">결품 예상</span>':''}${needQty>0?fmtNum(needQty):(review?`<span class="bj-until">약 ${fmtNum(R.until)}일 뒤</span>`:'-')}</td>`+
@@ -2040,7 +2047,8 @@ function openBjDetail(code){
   // [2026-10-27] 상세창이 재고 탭 안에 있어 다른 탭에서는 안 보이므로, 처음 열 때 화면 맨 바깥(body)으로 옮김
   const ov=document.getElementById('bjd-overlay'); if(ov.parentElement!==document.body) document.body.appendChild(ov);
   document.getElementById('bjd-thumb').innerHTML = it.img?`<img src="${escAttr(it.img)}" alt="">`:'';
-  document.getElementById('bjd-title').textContent = `${it.model||''} ${it.color||''}`.trim() || it.name;
+  // [2026-11-18] 컬러가 비어 있는 상품(뷰엔아미고 등)은 모델명만으로는 색을 모르므로 상품명을 제목으로
+  document.getElementById('bjd-title').textContent = (it.color ? `${it.model||''} ${it.color}`.trim() : '') || it.name || it.model;
   const po=(state.poOpen&&state.poOpen[code])||0;
   document.getElementById('bjd-sub').textContent = `${code} · 사이즈 ${it.size||'-'} · 현재고 ${fmtNum(it.stock)} · 입고예정수량 ${po>0?fmtNum(po):'-'}${it.saleStatus?` · ${it.saleStatus} (발주 판단 제외)`:''}`;
   document.getElementById('bjd-overlay').style.display='flex';
