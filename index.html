@@ -260,6 +260,7 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .search .search-go{position:absolute;right:5px;top:50%;transform:translateY(-50%);border:0;border-radius:var(--radius-full);
   background:#111;color:#fff;font:600 12px/1 'Pretendard',sans-serif;padding:7px 12px;cursor:pointer;}
 .search .search-go:hover{background:#333;}
+.search.search-edp{flex:0 1 260px;min-width:200px;}
 .row-count{font-size:12px;color:var(--text-tertiary);margin-left:auto;}
 .tbl-scroll{overflow:auto;border:1px solid var(--border-default);border-radius:var(--radius-md);max-height:480px;}
 table{width:100%;border-collapse:collapse;font-size:12.5px;white-space:nowrap;}
@@ -740,6 +741,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
         <div class="table-head">
           <h3>재고표</h3>
           <div class="search"><span class="ic">🔍</span><input type="text" id="i-searchBox" placeholder="띄어쓰기 = 그리고, 쉼표 = 또는 — 예: 오토 베이지, 오토 카키" title="띄어쓰기 = 그리고 (둘 다 들어간 것) · 쉼표 = 또는 (하나라도) · 예: 바오지 여성, 리치 남성 · Enter 또는 검색 버튼으로 적용" /><button type="button" class="search-go" id="i-searchGo">검색</button></div>
+          <div class="search search-edp"><span class="ic">#</span><input type="text" id="i-edpBox" placeholder="EDP넘버 검색 — 예: 132641, 141641" title="EDP넘버만 찾습니다 (일부만 써도 됨) · 쉼표 = 또는 · 왼쪽 검색칸과 함께 쓰면 둘 다 맞는 것만 · Enter 또는 검색 버튼으로 적용" /><button type="button" class="search-go" id="i-edpGo">검색</button></div>
           <button class="btn-file" id="bj-exportBtn">엑셀로 내려받기</button>
           <span class="bj-review-ctl" style="color:var(--text-tertiary)">바오지 기준 :</span>
           <!-- [2026-10-21 검토사본] 새 발주 규칙: 보유일수 = (현재고+입고예정) ÷ 하루판매 -->
@@ -753,7 +755,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
         <div class="tbl-scroll">
           <table id="bj-table"><thead><tr>
             <th>이미지</th><th class="bj-col-model">모델</th><th>색상</th><th class="bj-col-code">상품코드</th><th class="num">사이즈</th>
-            <th class="num">누적<br>입고수량</th><th class="num">누적<br>판매수량</th><th class="num">누적<br>판매비율</th><th class="num">현재고</th><th class="num">발주<br>필요수량</th><th class="num">입고<br>예정수량</th><th class="num">보유일수</th>
+            <th class="num">누적<br>입고수량</th><th class="num">누적<br>판매수량</th><th class="num">누적<br>판매비율</th><th class="num" title="기준일까지 최근 30일 판매 (일반판매 + 체험단)">최근 1개월<br>판매수량</th><th class="num">현재고</th><th class="num">발주<br>필요수량</th><th class="num">입고<br>예정수량</th><th class="num">보유일수</th>
           </tr></thead><tbody id="bj-tbody"></tbody></table>
         </div>
       </section>
@@ -1712,9 +1714,12 @@ function invTableRows(){
   if(q){
     /* [2026-11-18] 검색 규칙 (사용자 확정, 재고·판매 탭 공통 — searchMatch 참고)
        띄어쓰기 = 그리고, 쉼표 = 또는.  예) 「바오지 여성, 리치 남성」 = (바오지·여성 둘 다) 또는 (리치·남성 둘 다) */
-    const F=[r=>r.color,r=>r.size,r=>r.model,r=>r.code,r=>r.category,r=>r.gender,r=>r.edp,r=>r.name,r=>r.brand];
+    /* [2026-11-23] EDP넘버는 따로 있는 EDP 검색칸에서만 찾음 (644가 EDP 끝자리에 걸려 다른 모델이 나오던 문제) */
+    const F=[r=>r.color,r=>r.size,r=>r.model,r=>r.code,r=>r.category,r=>r.gender,r=>r.name,r=>r.brand];
     rows=rows.filter(r=>searchMatch(q, F.map(f=>f(r))));
   }
+  const qe=String(state.invEdpSearch||'').trim().toLowerCase();
+  if(qe) rows=rows.filter(r=>searchMatch(qe, [r.edp]));
   const {col,dir}=state.invSort;
   rows=rows.slice().sort((a,b)=>{let x=a[col],y=b[col];
     if(typeof x==='boolean') { x=x?1:0; y=y?1:0; }
@@ -1793,10 +1798,10 @@ function renderBjTable(){
   // [2026-10-27] 전체 브랜드일 때는 숨기고, 브랜드를 하나 골랐을 때만 보여 줌
   const oneBrand = state.invFilters.brand && state.invFilters.brand!=='ALL';
   // 검색 중이면 결과가 0건이어도 표를 숨기지 않음 (검색칸이 이 표 안에 있어서 같이 사라지던 문제)
-  const searching = !!String(state.invSearch||'').trim();
+  const searching = !!String(state.invSearch||'').trim() || !!String(state.invEdpSearch||'').trim();
   card.style.display = (oneBrand && (rows.length||stopAll||searching)) ? '' : 'none';
   if(!oneBrand || !rows.length){
-    document.getElementById('bj-tbody').innerHTML = (oneBrand&&searching) ? '<tr><td colspan="12" style="text-align:center;padding:30px;color:var(--text-tertiary)">검색 결과가 없습니다.</td></tr>' : '';
+    document.getElementById('bj-tbody').innerHTML = (oneBrand&&searching) ? '<tr><td colspan="13" style="text-align:center;padding:30px;color:var(--text-tertiary)">검색 결과가 없습니다.</td></tr>' : '';
     if(oneBrand&&searching) document.getElementById('bj-rowCount').textContent='0건';
     state.bjExportRows=[]; return; }
   const groups=[], byKey={};
@@ -1842,7 +1847,7 @@ function renderBjTable(){
       if(review) reviewCnt++;
       const ratio=gSold>0 ? Math.round(r.cumQty/gSold*1000)/10+'%' : '-';
       exportRows.push({brand:g.brand, model:g.model, color:g.color, code:r.code, name:r.name, edp:r.edp, size:r.size, inQty:r.inQty, sold:r.cumQty,
-        ratio: gSold>0 ? r.cumQty/gSold : null, stock:r.stock, needQty, po:poQty(r), days:R.days, need, urgent, review, stop});
+        ratio: gSold>0 ? r.cumQty/gSold : null, last30:r.last30||0, stock:r.stock, needQty, po:poQty(r), days:R.days, need, urgent, review, stop});
       const r1=v=>Math.round(v*10)/10;
       const P=r.orderParams||DEFAULT_ORDER_PARAMS;
       // [2026-10-27] 마우스 올렸을 때 설명을 짧게: ① 하루판매 ② 보유일수 ③ 기준 ④ 발주수량
@@ -1864,7 +1869,7 @@ function renderBjTable(){
                `<td rowspan="${n}" class="bj-merge bj-model">${esc(g.model)||'-'}<div class="bj-brand">${esc(g.brand)}</div>${g.rows.some(x=>x.isNewModel)?'<div><span class="bj-new-tag">신규모델</span></div>':''}</td>`+
                `<td rowspan="${n}" class="bj-merge">${esc(g.color)||'-'}</td>`:'')+
         `<td><a class="bj-code" data-code="${escAttr(r.code)}" href="#">${esc(r.code)}</a>${pname?`<div class="bj-pname" title="${escAttr(r.name)}">${esc(pname)}</div>`:''}</td><td class="num">${esc(r.size)||'-'}${isBj&&BJ_EU[String(r.size).trim()]?`<span class="bj-eu">(${BJ_EU[String(r.size).trim()]})</span>`:''}</td>`+
-        `<td class="num">${r.inQty==null?'-':fmtNum(r.inQty)}</td><td class="num">${fmtNum(r.cumQty)}</td><td class="num">${ratio}</td>`+
+        `<td class="num">${r.inQty==null?'-':fmtNum(r.inQty)}</td><td class="num">${fmtNum(r.cumQty)}</td><td class="num">${ratio}</td><td class="num">${fmtNum(r.last30||0)}</td>`+
         `<td class="num">${fmtNum(r.stock)}</td>`+
         `<td class="num${needQty>0?' bj-needqty':''}">${stop?`<span class="bj-stop-tag">${stop}</span>`:''}${urgent?'<span class="bj-urgent-tag">결품 예상</span>':''}${needQty>0?fmtNum(needQty):(review?`<span class="bj-until">약 ${fmtNum(R.until)}일 뒤</span>`:'-')}</td>`+
         `<td class="num">${poQty(r)>0?`<span class="bj-po" data-code="${escAttr(r.code)}">${fmtNum(poQty(r))}</span>`:'-'}</td>`+
@@ -2010,19 +2015,20 @@ const DEFAULT_ORDER_PARAMS = {lead:7, safety:7, cycle:14};
 function brandOrderParams(brand){ return BRAND_ORDER_PARAMS[String(brand||'').trim()] || DEFAULT_ORDER_PARAMS; }
 function applyUnifiedInv(){
   const today=bjdDay(new Date()), t0=today.getTime();
-  const end=bjdBaseEnd(), from7=end-7*DAY, from60=end-60*DAY;   // 최근 7일·60일 = 기준일까지
+  const end=bjdBaseEnd(), from7=end-7*DAY, from30=end-30*DAY, from60=end-60*DAY;   // 최근 7일·30일·60일 = 기준일까지
   const agg={};
   state.ord.forEach(o=>{
     if(!o.code || !o.date || !bjdIsSale(o)) return;
     const t=bjdDay(o.date).getTime(); if(t>t0) return;           // 내일 이후 날짜만 제외 (누적은 오늘까지)
-    const a=agg[o.code]||(agg[o.code]={cum:0,exp:0,d7:0,d60:0});
+    const a=agg[o.code]||(agg[o.code]={cum:0,exp:0,d7:0,d30:0,d60:0});
     a.cum+=o.qty; if(o.type==='체험단') a.exp+=o.qty;
     if(t>=from7 && t<end) a.d7+=o.qty;
+    if(t>=from30 && t<end) a.d30+=o.qty;   // [2026-11-23] 재고표 「최근 1개월 판매수량」
     if(t>=from60 && t<end) a.d60+=o.qty;
   });
   state.inv.forEach(it=>{
-    const a=agg[it.code]||{cum:0,exp:0,d7:0,d60:0};
-    it.cumQty=a.cum; it.expQty=a.exp; it.last7=a.d7; it.last2m=a.d60;
+    const a=agg[it.code]||{cum:0,exp:0,d7:0,d30:0,d60:0};
+    it.cumQty=a.cum; it.expQty=a.exp; it.last7=a.d7; it.last30=a.d30; it.last2m=a.d60;
     if(state.hasPoSheet) it.onOrder=(state.poOpen&&state.poOpen[it.code])||0;   // 입고예정 = 입고예정 시트
     const rate=bjdForecastRate(it.code, today).rate;
     const have=it.stock+(it.onOrder||0);
@@ -2192,12 +2198,12 @@ document.getElementById('bj-exportBtn').addEventListener('click',()=>{
   const fd=d=>d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'날짜 미정';
   // [2026-10-27] 상품명·EDP넘버 추가, 머리글 색·필터·틀고정 (SheetJS 무료판은 칸 색을 못 써서 bjXlsx로 직접 만듦)
   const cols=[{h:'브랜드',w:11},{h:'모델',w:12},{h:'색상',w:11},{h:'상품코드',w:20},{h:'상품명',w:40},{h:'EDP넘버',w:18},{h:'사이즈',w:7,al:'c'},
-    {h:'누적입고수량',w:11,t:'n'},{h:'누적판매수량',w:11,t:'n'},{h:'누적판매비율',w:11,t:'p'},{h:'현재고',w:8,t:'n'},{h:'발주필요수량',w:11,t:'n'},{h:'입고예정수량',w:11,t:'n'},
+    {h:'누적입고수량',w:11,t:'n'},{h:'누적판매수량',w:11,t:'n'},{h:'누적판매비율',w:11,t:'p'},{h:'최근1개월판매',w:12,t:'n'},{h:'현재고',w:8,t:'n'},{h:'발주필요수량',w:11,t:'n'},{h:'입고예정수량',w:11,t:'n'},
     {h:'입고예정 상세(차수·예정일·수량·상태·비고)',w:48},{h:'보유일수',w:9,t:'n'},{h:'발주필요',w:18}];
   const data=rows.map(r=>{
     const lines=(state.poLines&&state.poLines[r.code])||[];
     const detail=lines.map((l,i)=>`${i+1}차 ${fd(l.date)} ${l.qty}개 ${l.status||''}${l.note?' ('+l.note+')':''}`.trim()).join(' / ');
-    return [r.brand, r.model, r.color, r.code, r.name, r.edp, r.size, r.inQty, r.sold, r.ratio, r.stock, r.needQty||null, r.po||null, detail, (r.stop||!isFinite(r.days))?null:Math.round(r.days), r.stop?r.stop:(r.urgent?'발주필요(결품 예상)':(r.need?'발주필요':(r.review?'발주검토':'')))];
+    return [r.brand, r.model, r.color, r.code, r.name, r.edp, r.size, r.inQty, r.sold, r.ratio, r.last30, r.stock, r.needQty||null, r.po||null, detail, (r.stop||!isFinite(r.days))?null:Math.round(r.days), r.stop?r.stop:(r.urgent?'발주필요(결품 예상)':(r.need?'발주필요':(r.review?'발주검토':'')))];
   });
   const now=new Date();
   const ymd=now.getFullYear()+String(now.getMonth()+1).padStart(2,'0')+String(now.getDate()).padStart(2,'0');
@@ -2319,6 +2325,7 @@ document.getElementById('i-onlyNeed').addEventListener('change',e=>{state.invFil
 document.getElementById('i-resetBtn').addEventListener('click',()=>{
   // 브랜드는 사이드바(전역)에서만 바꾸는 값이라 "필터 초기화"로 풀리지 않게 유지합니다
   state.invFilters={brand:state.brand,category:'ALL',model:'ALL',gender:'ALL',onlyNeed:false}; state.invSearch=''; document.getElementById('i-searchBox').value='';
+  state.invEdpSearch=''; document.getElementById('i-edpBox').value='';
   document.getElementById('i-favSelect').value='';
   state.openMsel=null;
   buildInvFilters(); renderInv();});
@@ -2328,10 +2335,14 @@ function bindSearchApply(boxId, goId, apply){
   box.addEventListener('keydown',e=>{ if(e.key==='Enter' && !e.isComposing){ e.preventDefault(); apply(box.value); } });
   if(go) go.addEventListener('click',()=>apply(box.value));
 }
-bindSearchApply('i-searchBox','i-searchGo',v=>{state.invSearch=v;renderInvTable();});
+// 두 검색칸(일반·EDP) 어느 쪽에서 Enter/검색을 눌러도 두 칸 값을 함께 적용
+const applyInvSearch=()=>{ state.invSearch=document.getElementById('i-searchBox').value; state.invEdpSearch=document.getElementById('i-edpBox').value; renderInvTable(); };
+bindSearchApply('i-searchBox','i-searchGo',applyInvSearch);
+bindSearchApply('i-edpBox','i-edpGo',applyInvSearch);
 setupFavControls('i',
-  ()=>({filters:{...state.invFilters}, search:state.invSearch}),
+  ()=>({filters:{...state.invFilters}, search:state.invSearch, edp:state.invEdpSearch||''}),
   (saved)=>{ state.invFilters={...saved.filters}; state.invSearch=saved.search||''; document.getElementById('i-searchBox').value=state.invSearch;
+    state.invEdpSearch=saved.edp||''; document.getElementById('i-edpBox').value=state.invEdpSearch;
     ['category','model','gender'].forEach(k=>{ if(state.invFilters[k]===undefined) state.invFilters[k]='ALL'; });
     // [2026-11-09] 예전 즐겨찾기는 카테고리를 글자 하나로 저장 → 체크박스용 목록으로 바꿈
     if(typeof state.invFilters.category==='string' && state.invFilters.category!=='ALL') state.invFilters.category=[state.invFilters.category];
