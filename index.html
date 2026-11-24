@@ -1812,6 +1812,12 @@ function renderBjTable(){
     if(!byKey[key]){ byKey[key]={brand:r.brand, model, color:r.color, img:'', rows:[]}; groups.push(byKey[key]); }
     const g=byKey[key]; g.rows.push(r); if(!g.img && r.img) g.img=r.img;
   });
+  /* [2026-11-23] 같은 모델은 마스터에서 처음 나온 자리에 모음 (사용자 요청)
+     마스터는 새 제품을 맨 아래에 추가하므로, 나중에 추가된 색(예: 백패킹 카키)이 떨어져 보이던 문제.
+     모델 사이 순서와 모델 안 색상 순서는 마스터 순서 그대로 */
+  const modelFirst={};
+  groups.forEach((g,i)=>{ const mk=g.brand+'|'+g.model; if(!(mk in modelFirst)) modelFirst[mk]=i; g._i=i; });
+  groups.sort((a,b)=>(modelFirst[a.brand+'|'+a.model]-modelFirst[b.brand+'|'+b.model]) || (a._i-b._i));
   const sizeNum=v=>{const n=parseFloat(v); return isNaN(n)?Infinity:n;};
   const esc=v=>String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   // [2026-10-15] 발주필요 = (현재고 + 입고예정수량) < 예측 하루 판매량 × (리드타임 50일 + 여유 50일)
