@@ -363,10 +363,13 @@ a.bj-code{color:var(--color-info-fg);text-decoration:underline;text-underline-of
 .bjd-period button.on{background:var(--text-primary);color:#fff;border-color:var(--text-primary);}
 .bjd-hint{margin-left:auto;color:var(--text-tertiary);}
 .bjd-chart{height:300px;position:relative;margin-bottom:12px;}
-.bjd-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:8px;}
-.bjd-sum > div{border:1px solid var(--border-default);border-radius:var(--radius-md);padding:9px 12px;}
+/* [2026-11-25] 요약 칸 5개를 한 줄에 (사용자 요청) */
+.bjd-sum{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin-bottom:8px;}
+.bjd-sum > div{border:1px solid var(--border-default);border-radius:var(--radius-md);padding:7px 10px;min-width:0;}
+.bjd-sum .v{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+@media (max-width:640px){ .bjd-sum{grid-template-columns:repeat(2,minmax(0,1fr));} }
 .bjd-sum > div.fc{border-style:dashed;border-color:var(--color-info-fg);}
-.bjd-sum .l{font-size:11.5px;color:var(--text-tertiary);} .bjd-sum .v{font-size:16px;font-weight:700;color:var(--text-primary);}
+.bjd-sum .l{font-size:11px;color:var(--text-tertiary);white-space:nowrap;} .bjd-sum .v{font-size:15px;font-weight:700;color:var(--text-primary);}
 /* [2026-11-25] 하루판매 계산표 (엑셀처럼 칸 테두리) */
 .bjd-rate{border-collapse:collapse;margin:0 0 10px;font-size:12.5px;}
 .bjd-rate caption{caption-side:top;text-align:left;font-size:11.5px;color:var(--text-tertiary);padding-bottom:4px;}
@@ -1868,7 +1871,7 @@ function renderBjTable(){
       const r2=v=>Math.round(v*100)/100;
       const tipLines = stop ? [`${stop} → 발주 판단 안 함`]
         : (fr.allOut||fr.hold) ? [bjdRateText(fr)]
-        : !(rate>0) ? ['최근 60일 판매 없음 → 발주 판단 안 함']
+        : !(rate>0) ? [fr.total>0 ? `하루판매 0.0개 (60일 판매 ${fmtNum(fr.total)}개 ÷ 재고 있던 날 ${fr.stockDays}일, 반올림) → 발주 판단 안 함` : '최근 60일 판매 없음 → 발주 판단 안 함']
         : [ bjdRateText(fr),
             `보유 ${fmtNum(have)}개 (현재고 ${fmtNum(r.stock)} + 입고예정 ${fmtNum(poQty(r))}) ÷ 하루판매 = ${fmtNum(Math.round(R.days))}일치`,
             isBj ? `기준: ${S.need}일 미만 발주필요 · ${S.need}~${S.review}일 발주검토` : `기준: ${P.lead+P.safety}일치 미만 발주필요`,
@@ -2005,8 +2008,10 @@ function bjdForecastRate(code, today){
   const outDays=BJD.RATE_DAYS-stockDays;
   const allOut=stockDays===0;
   const hold=!allOut && stockDays<BJD_MIN_STOCK_DAYS;
-  const rate=stockDays>0 ? total/stockDays : 0;
-  return {rate: (allOut||hold)?0:rate, rawRate:rate, capped:0, days:stockDays, stockDays, outDays, total, allOut, hold};
+  // [2026-11-25] 하루판매는 소수점 첫째 자리로 반올림한 값으로 모든 계산(보유일수·발주필요·발주수량·예측)을 함 (사용자 확정)
+  const exact=stockDays>0 ? total/stockDays : 0;
+  const rate=Math.round(exact*10)/10;
+  return {rate: (allOut||hold)?0:rate, rawRate:rate, exactRate:exact, capped:0, days:stockDays, stockDays, outDays, total, allOut, hold};
 }
 // [2026-10-27] 마우스 올렸을 때 보이는 하루판매 설명 (짧게)
 function bjdRateText(fr){
@@ -2150,11 +2155,23 @@ function renderBjDetail(){
   const r1=v=>Math.round(v*10)/10;
   const rateRes = fr.allOut ? '계산 불가 (60일 내내 품절)'
     : fr.hold ? `판단 보류 (참고 ${r1(fr.rawRate)}개)` : `${r1(fr.rate)}개`;
+  // [2026-11-25] 현재고·보유일수(개월)·발주필요수량도 같은 표에 (재고표와 같은 규칙: 바오지 bjRule, 그 밖은 기존 기준)
+  const po=(state.poOpen&&state.poOpen[code])||0, have=it.stock+po, stop=it.saleStatus;
+  const isBj=String(it.brand||'').trim()==='바오지', S=bjSettings();
+  const R=isBj ? bjRule(fr.rate, have, stop, S)
+    : {days: fr.rate>0 ? have/fr.rate : Infinity, need:!!it.needOrder, qty:it.shortage||0};
+  const daysTd = stop ? '-' : !(fr.rate>0) ? '-' : `${fmtNum(Math.round(R.days))}일 (${(R.days/30).toFixed(1)}개월)`;
+  const qtyTd = stop ? `${stop} · 발주 안 함` : R.need ? `${fmtNum(R.qty)}개` : '-';
+  const qtySub = stop ? '' : !(fr.rate>0) ? '하루판매 0 → 판단 안 함'
+    : isBj ? (R.need ? `${r1(fr.rate)} × ${S.target}일 − ${fmtNum(have)}` : `보유 ${S.need}일 이상 → 발주 안 함`)
+    : (R.need ? '28일치 − 보유' : '발주 안 함');
   document.getElementById('bjd-rate').innerHTML =
-    `<caption>하루 판매량 계산 (${bjdMD(new Date(bjdBaseEnd()-60*DAY))} ~ ${bjdMD(new Date(bjdBaseEnd()-DAY))}, 최근 60일)</caption>`+
-    `<tr><th>재고 있던 날</th><th>판매수량</th><th>일평균</th></tr>`+
-    `<tr><td>${fmtNum(fr.stockDays)}일</td><td>${fmtNum(fr.total)}개</td><td class="res">${rateRes}</td></tr>`+
-    `<tr><td class="sub">${fr.outDays>0?`품절 ${fmtNum(fr.outDays)}일 제외`:'품절일 없음'}</td><td class="sub">일반판매 + 체험단</td><td class="sub">판매수량 ÷ 재고 있던 날${fr.hold?` · ${BJD_MIN_STOCK_DAYS}일 미만은 보류`:''}</td></tr>`;
+    `<caption>하루 판매량·발주 계산 (${bjdMD(new Date(bjdBaseEnd()-60*DAY))} ~ ${bjdMD(new Date(bjdBaseEnd()-DAY))}, 최근 60일)</caption>`+
+    `<tr><th>재고 있던 날</th><th>판매수량</th><th>일평균</th><th>현재고${po?' + 입고예정':''}</th><th>보유일수</th><th>발주필요수량</th></tr>`+
+    `<tr><td>${fmtNum(fr.stockDays)}일</td><td>${fmtNum(fr.total)}개</td><td class="res">${rateRes}</td>`+
+      `<td>${po?`${fmtNum(it.stock)} + ${fmtNum(po)} = ${fmtNum(have)}개`:`${fmtNum(it.stock)}개`}</td><td>${daysTd}</td><td class="res">${qtyTd}</td></tr>`+
+    `<tr><td class="sub">${fr.outDays>0?`품절 ${fmtNum(fr.outDays)}일 제외`:'품절일 없음'}</td><td class="sub">일반판매 + 체험단</td><td class="sub">판매수량 ÷ 재고 있던 날 (소수점 첫째 자리 반올림)${fr.hold?` · ${BJD_MIN_STOCK_DAYS}일 미만은 보류`:''}</td>`+
+      `<td class="sub">${po?'현재고 + 입고예정':'입고예정 없음'}</td><td class="sub">보유 ÷ 일평균</td><td class="sub">${qtySub}</td></tr>`;
   document.getElementById('bjd-tbody').innerHTML =
     fc.slice().reverse().map(f=>`<tr class="fc"><td>${bjdMD(f.s)} ~ ${bjdMD(new Date(f.s.getTime()+6*DAY))} (예측)</td><td class="num">-</td><td class="num">-</td><td class="num">${Math.round(f.sales*10)/10}</td><td class="num">-</td><td class="num">-</td><td class="num">${fmtNum(curSafety)}</td><td class="num">${Math.round(f.stock)}</td></tr>`).join('')+
     weeks.slice().reverse().map(w=>{ const wi=weeks.indexOf(w); const sl=(v,t,show)=>v?`<a class="bjd-sl" href="#" data-w="${wi}" data-t="${t}">${fmtNum(v)}</a>`:(show?'0':'-');
