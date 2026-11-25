@@ -1871,7 +1871,7 @@ function renderBjTable(){
       const r2=v=>Math.round(v*100)/100;
       const tipLines = stop ? [`${stop} → 발주 판단 안 함`]
         : (fr.allOut||fr.hold) ? [bjdRateText(fr)]
-        : !(rate>0) ? [fr.total>0 ? `하루판매 0.0개 (60일 판매 ${fmtNum(fr.total)}개 ÷ 재고 있던 날 ${fr.stockDays}일, 반올림) → 발주 판단 안 함` : '최근 60일 판매 없음 → 발주 판단 안 함']
+        : !(rate>0) ? [fr.total>0 ? `하루판매 0.0개 (${BJD.RATE_DAYS}일 판매 ${fmtNum(fr.total)}개 ÷ 재고 있던 날 ${fr.stockDays}일, 반올림) → 발주 판단 안 함` : `최근 ${BJD.RATE_DAYS}일 판매 없음 → 발주 판단 안 함`]
         : [ bjdRateText(fr),
             `보유 ${fmtNum(have)}개 (현재고 ${fmtNum(r.stock)} + 입고예정 ${fmtNum(poQty(r))}) ÷ 하루판매 = ${fmtNum(Math.round(R.days))}일치`,
             isBj ? `기준: ${S.need}일 미만 발주필요 · ${S.need}~${S.review}일 발주검토` : `기준: ${P.lead+P.safety}일치 미만 발주필요`,
@@ -1879,7 +1879,7 @@ function renderBjTable(){
             ...(urgent ? [`결품 예상: 보유일수가 리드타임(${isBj?BJ_LEAD_DAYS:P.lead}일)보다 짧음`] : []),
             ...(review ? [`약 ${R.until}일 뒤 발주필요`] : []) ];
       const tip=` title="${escAttr(tipLines.join('\n'))}"`;
-      const daysTxt = stop ? '-' : fr.allOut ? '<span class="bj-mon">60일 품절</span>' : fr.hold ? `<span class="bj-mon">판단 보류 (${fr.stockDays}일)</span>`
+      const daysTxt = stop ? '-' : fr.allOut ? `<span class="bj-mon">${BJD.RATE_DAYS}일 품절</span>` : fr.hold ? `<span class="bj-mon">판단 보류 (${fr.stockDays}일)</span>`
         : !(rate>0) ? '-' : `${fmtNum(Math.round(R.days))}일 <span class="bj-mon">(${(R.days/30).toFixed(1)}개월)</span>`;
       html+=`<tr class="${i===0?'bj-first':''}${need?' bj-need':''}${urgent?' bj-urgent':''}${review?' bj-review':''}${stop?' bj-stop':''}"${tip}>`+
         (i===0?`<td rowspan="${n}" class="bj-merge bj-img">${g.img?`<div class="bj-crop"><img src="${escAttr(g.img)}" alt="${esc(g.model)} ${esc(g.color)}" loading="lazy"></div>`:''}</td>`+
@@ -1901,7 +1901,7 @@ function renderBjTable(){
     // [2026-10-21 검토사본] 긴급은 발주필요에 합치고, 그중 결품 예상 건수만 따로 표시
     `<span class="bj-legend" title="보유일수 ${bjSettings().need}일 미만">발주필요 ${fmtNum(needCnt)}건${urgentCnt?` (결품 예상 ${fmtNum(urgentCnt)})`:''}</span> `+
     (bjSettings().review>bjSettings().need?`<span class="bj-legend bj-legend-review" title="보유일수 ${bjSettings().need}~${bjSettings().review}일">발주검토 ${fmtNum(reviewCnt)}건 · 수량 없음</span>`:'')+
-    `<span class="bj-legend-note">하루판매 = 최근 60일 판매 ÷ 재고 있던 날 (품절일 제외, ${BJD_MIN_STOCK_DAYS}일 미만은 판단 보류) · 보유일수 = (현재고+입고예정) ÷ 하루판매 · 바오지: 발주필요수량 = 하루판매 × 목표 ${bjSettings().target}일 − 보유, 결품 예상 = 보유일수 &lt; 리드타임 ${BJ_LEAD_DAYS}일 · 그 밖의 브랜드: 기존 기준(리드타임 7 + 여유 7일, 수량 = 28일치 − 보유) · 줄에 마우스를 올리면 계산 근거</span>`+
+    `<span class="bj-legend-note">하루판매 = 최근 ${BJD.RATE_DAYS}일 판매 ÷ 재고 있던 날 (품절일 제외, ${BJD_MIN_STOCK_DAYS}일 미만은 판단 보류) · 보유일수 = (현재고+입고예정) ÷ 하루판매 · 바오지: 발주필요수량 = 하루판매 × 목표 ${bjSettings().target}일 − 보유, 결품 예상 = 보유일수 &lt; 리드타임 ${BJ_LEAD_DAYS}일 · 그 밖의 브랜드: 기존 기준(리드타임 7 + 여유 7일, 수량 = 28일치 − 보유) · 줄에 마우스를 올리면 계산 근거</span>`+
     (stopAll?` <span class="bj-legend bj-legend-stop" title="vol5 마스터테이블 판매상태가 단종·공급불가인 SKU. 발주 판단에서 뺍니다">단종·공급불가 ${fmtNum(stopAll)}건 · 발주 안 함${hideStop?' (숨김)':''}</span>`:'')+
     ` · 모델·색상 ${fmtNum(groups.length)}개 · SKU ${fmtNum(rows.length)}건`;
 }
@@ -1954,13 +1954,15 @@ const BJ_EU = {'235':37,'240':38,'245':39,'250':40,'255':41,'260':41,'265':42,'2
    - 판매량 = 일반판매 + 체험단 (샘플·유투버·직원구매 등 기타출고 제외)
    - 예측 하루 판매량 = 최근 2개월(60일, 기준일까지) 판매량 ÷ 60 (단순 평균)
    - 안전재고 = 1.65 × 일판매 표준편차(최근 2개월) × √리드타임 50일 (품절 없이 버틸 확률 약 95%) */
-const BJD = {code:null, weeks:13, FC_WEEKS:4,   /* [2026-11-25] 예측 8주 → 4주(약 1개월) 사용자 요청 */ RATE_DAYS:60, LEAD_DAYS:50, Z:1.65};
+const BJD = {code:null, weeks:13, FC_WEEKS:4,   /* [2026-11-25] 예측 8주 → 4주(약 1개월) 사용자 요청 */ RATE_DAYS:90, SAFETY_DAYS:60, LEAD_DAYS:50, Z:1.65};
+/* [2026-11-25] 하루판매 계산 기간 60일 → 90일(3개월) 사용자 확정 (재고표 위 「발주필요 60일」과 헷갈려서).
+   안전재고(표준편차) 기간은 요청 범위 밖이라 60일 그대로 → SAFETY_DAYS */
 const DAY=86400000;
 const bjdIsSale = o => o.type==='일반판매' || o.type==='체험단';
 function bjdSafety(code, endT){
-  const from=endT-BJD.RATE_DAYS*DAY, byDay={};
+  const from=endT-BJD.SAFETY_DAYS*DAY, byDay={};
   state.ord.forEach(o=>{ if(o.code===code && o.date && bjdIsSale(o)){ const t=bjdDay(o.date).getTime(); if(t>from && t<=endT) byDay[t]=(byDay[t]||0)+o.qty; } });
-  const n=BJD.RATE_DAYS; let sum=0; Object.values(byDay).forEach(v=>sum+=v);
+  const n=BJD.SAFETY_DAYS; let sum=0; Object.values(byDay).forEach(v=>sum+=v);
   const mean=sum/n; let sq=0;
   for(let i=0;i<n;i++){ const t=bjdDay(new Date(endT-i*DAY)).getTime(); const v=byDay[t]||0; sq+=(v-mean)*(v-mean); }
   const sd=Math.sqrt(sq/n);
@@ -2015,9 +2017,9 @@ function bjdForecastRate(code, today){
 }
 // [2026-10-27] 마우스 올렸을 때 보이는 하루판매 설명 (짧게)
 function bjdRateText(fr){
-  if(fr.allOut) return '최근 60일 내내 품절 → 하루판매 계산 불가 (발주 판단 안 함)';
+  if(fr.allOut) return `최근 ${BJD.RATE_DAYS}일 내내 품절 → 하루판매 계산 불가 (발주 판단 안 함)`;
   if(fr.hold) return `재고 있던 날 ${fr.stockDays}일뿐 (${BJD_MIN_STOCK_DAYS}일 미만) → 판단 보류\n참고: 판매 ${fmtNum(fr.total)}개 ÷ ${fr.stockDays}일 = ${Math.round(fr.rawRate*10)/10}개`;
-  return `하루판매 ${Math.round(fr.rate*10)/10}개 = 60일 판매 ${fmtNum(fr.total)}개 ÷ 재고 있던 날 ${fr.stockDays}일`+(fr.outDays>0?` (품절 ${fr.outDays}일 제외)`:'');
+  return `하루판매 ${Math.round(fr.rate*10)/10}개 = ${BJD.RATE_DAYS}일 판매 ${fmtNum(fr.total)}개 ÷ 재고 있던 날 ${fr.stockDays}일`+(fr.outDays>0?` (품절 ${fr.outDays}일 제외)`:'');
 }
 
 /* [2026-10-16] 판매·발주 기준 통일 (사용자 확정)
@@ -2153,7 +2155,7 @@ function renderBjDetail(){
   document.getElementById('bjd-note').textContent=notes.join(' ');
   // [2026-11-25] 하루판매 계산법을 표로 (사용자 요청). 일평균은 소수점 첫째 자리까지
   const r1=v=>Math.round(v*10)/10;
-  const rateRes = fr.allOut ? '계산 불가 (60일 내내 품절)'
+  const rateRes = fr.allOut ? `계산 불가 (${BJD.RATE_DAYS}일 내내 품절)`
     : fr.hold ? `판단 보류 (참고 ${r1(fr.rawRate)}개)` : `${r1(fr.rate)}개`;
   // [2026-11-25] 현재고·보유일수(개월)·발주필요수량도 같은 표에 (재고표와 같은 규칙: 바오지 bjRule, 그 밖은 기존 기준)
   const po=(state.poOpen&&state.poOpen[code])||0, have=it.stock+po, stop=it.saleStatus;
@@ -2166,7 +2168,7 @@ function renderBjDetail(){
     : isBj ? (R.need ? `${r1(fr.rate)} × ${S.target}일 − ${fmtNum(have)}` : `보유 ${S.need}일 이상 → 발주 안 함`)
     : (R.need ? '28일치 − 보유' : '발주 안 함');
   document.getElementById('bjd-rate').innerHTML =
-    `<caption>하루 판매량·발주 계산 (${bjdMD(new Date(bjdBaseEnd()-60*DAY))} ~ ${bjdMD(new Date(bjdBaseEnd()-DAY))}, 최근 60일)</caption>`+
+    `<caption>하루 판매량·발주 계산 (${bjdMD(new Date(bjdBaseEnd()-BJD.RATE_DAYS*DAY))} ~ ${bjdMD(new Date(bjdBaseEnd()-DAY))}, 최근 ${BJD.RATE_DAYS}일)</caption>`+
     `<tr><th>재고 있던 날</th><th>판매수량</th><th>일평균</th><th>현재고${po?' + 입고예정':''}</th><th>보유일수</th><th>발주필요수량</th></tr>`+
     `<tr><td>${fmtNum(fr.stockDays)}일</td><td>${fmtNum(fr.total)}개</td><td class="res">${rateRes}</td>`+
       `<td>${po?`${fmtNum(it.stock)} + ${fmtNum(po)} = ${fmtNum(have)}개`:`${fmtNum(it.stock)}개`}</td><td>${daysTd}</td><td class="res">${qtyTd}</td></tr>`+
