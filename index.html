@@ -260,6 +260,7 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .search .search-go{position:absolute;right:5px;top:50%;transform:translateY(-50%);border:0;border-radius:var(--radius-full);
   background:#111;color:#fff;font:600 12px/1 'Pretendard',sans-serif;padding:7px 12px;cursor:pointer;}
 .search .search-go:hover{background:#333;}
+#o-table .o-cnt{font-size:10px;color:var(--text-tertiary);margin-left:3px;}
 .search.search-edp{flex:0 1 260px;min-width:200px;}
 .row-count{font-size:12px;color:var(--text-tertiary);margin-left:auto;}
 .tbl-scroll{overflow:auto;border:1px solid var(--border-default);border-radius:var(--radius-md);max-height:480px;}
@@ -299,6 +300,12 @@ tbody tr.need td{background:rgba(212,47,82,.08);}
 #bj-table td.bj-needqty{color:var(--color-error-fg);font-weight:700;}
 #bj-table td.bj-model{font-weight:700;}
 #bj-table tr.bj-first td{border-top:2px solid var(--border-strong);}
+/* [2026-11-25] 표를 한눈에: 이미지 220×128 → 176×102(같은 비율), 칸 좌우 여백 줄임, 줄바꿈 안 함 */
+#bj-table td.bj-img{width:184px;padding:4px;}
+#bj-table td.bj-img .bj-crop{width:176px;height:102px;}
+#bj-table thead th{padding-left:5px;padding-right:5px;}
+#bj-table tbody td{padding-left:6px;padding-right:6px;white-space:nowrap;}
+#bj-table thead th.num, #bj-table tbody td.num{padding-left:5px;padding-right:5px;}
 /* [2026-11-25] 모델·색상 합계 줄 */
 #bj-table tr.bj-total td{background:rgba(17,17,17,.05);font-weight:700;color:var(--text-primary);border-top:1px solid var(--border-strong);}
 #bj-table tr.bj-total td:first-child{text-align:center;}
@@ -768,7 +775,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
         <div class="tbl-scroll">
           <table id="bj-table"><thead><tr>
             <th>이미지</th><th class="bj-col-model">모델</th><th>색상</th><th class="bj-col-code">상품코드</th><th class="num">사이즈</th>
-            <th class="num">누적<br>입고수량</th><th class="num">누적<br>판매수량</th><th class="num">누적<br>판매비율</th><th class="num" title="기준일까지 최근 30일 판매 (일반판매 + 체험단)">최근 1개월<br>판매수량</th><th class="num">현재고</th><th class="num">발주<br>필요수량</th><th class="num">입고<br>예정수량</th><th class="num">보유일수</th>
+            <th class="num" title="누적 입고수량">누적<br>입고</th><th class="num" title="누적 판매수량 (첫 판매일부터, 일반판매 + 체험단)">누적<br>판매</th><th class="num" title="같은 모델·색상 안에서 이 사이즈가 차지하는 누적 판매 비율">판매<br>비율</th><th class="num" title="기준일까지 최근 30일 판매 (일반판매 + 체험단)">1개월<br>판매</th><th class="num">현재고</th><th class="num" title="발주 필요수량">발주<br>수량</th><th class="num" title="입고 예정수량">입고<br>예정</th><th class="num" title="보유개월 = (현재고 + 입고예정) ÷ 하루판매 ÷ 30">보유<br>개월</th>
           </tr></thead><tbody id="bj-tbody"></tbody></table>
         </div>
       </section>
@@ -935,7 +942,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
         </div>
         <!-- 2줄: 브랜드를 골랐을 때만. 라인업 → 성별 사이즈 순 -->
         <div class="card" id="o-card-model">
-          <h3>라인업별 판매</h3><p class="q">모델명(라인업) 기준 비중 (상위 12개 + 기타)</p>
+          <h3>라인업별 판매</h3><p class="q">모델명(라인업) 기준 (상위 12개 + 기타)</p>
           <div class="chart-box h-mid"><canvas id="o-ch-model"></canvas></div>
         </div>
         <div class="card" id="o-card-size1">
@@ -1579,9 +1586,14 @@ function refreshFavSelect(tab){
 }
 function setupFavControls(tab, getState, applyState, rebuild, render){
   document.getElementById(tab+'-favSaveBtn').addEventListener('click',()=>{
-    const name=prompt('저장할 이름을 입력하세요 (예: 바오지 안전화 발주필요)');
+    /* [2026-11-25] 즐겨찾기를 불러와 고친 뒤 저장하면 그 이름이 미리 채워짐.
+       이름 그대로 저장 = 덮어쓰기, 이름을 바꾸면 = 새로 추가 (사용자 확정) */
+    const cur=document.getElementById(tab+'-favSelect').value||'';
+    const input=prompt(cur ? `이름을 그대로 두면 '${cur}'에 덮어쓰고, 이름을 바꾸면 새로 저장합니다.` : '저장할 이름을 입력하세요 (예: 바오지 안전화 발주필요)', cur);
+    const name=(input||'').trim();
     if(!name) return;
     const favs=getSavedFilters(tab);
+    if(name!==cur && favs[name] && !confirm(`'${name}' 즐겨찾기가 이미 있습니다. 덮어쓸까요?`)) return;
     favs[name]=getState();
     setSavedFilters(tab,favs);
     refreshFavSelect(tab);
@@ -1782,7 +1794,7 @@ function bjHqThumbs(){
     const draw=async()=>{
       try{
         const dpr=Math.max(1, window.devicePixelRatio||1);
-        const W=Math.round(220*1.18*dpr), H=Math.round(128*1.18*dpr);   // 칸 크기(CSS .bj-crop)와 같게. 탭이 숨겨져 있어도 계산되도록 고정값
+        const W=Math.round(176*1.18*dpr), H=Math.round(102*1.18*dpr);   // [2026-11-25] 176×102로 줄임   // 칸 크기(CSS .bj-crop)와 같게. 탭이 숨겨져 있어도 계산되도록 고정값
         const nw=img.naturalWidth, nh=img.naturalHeight; if(!nw||!nh||!W||!H) return;
         const s=Math.max(W/nw, H/nh), sw=W/s, sh=H/s;   // object-fit:cover 와 같은 자르기
         // 반씩 여러 번 나눠 줄임(1500→750→375→목표). 한 번에 7배 줄이면 계단 현상(짜글짜글)이 생김
@@ -1881,14 +1893,14 @@ function renderBjTable(){
         : (fr.allOut||fr.hold) ? [bjdRateText(fr)]
         : !(rate>0) ? [fr.total>0 ? `하루판매 0.0개 (${BJD.RATE_DAYS}일 판매 ${fmtNum(fr.total)}개 ÷ 재고 있던 날 ${fr.stockDays}일, 반올림) → 발주 판단 안 함` : `최근 ${BJD.RATE_DAYS}일 판매 없음 → 발주 판단 안 함`]
         : [ bjdRateText(fr),
-            `보유 ${fmtNum(have)}개 (현재고 ${fmtNum(r.stock)} + 입고예정 ${fmtNum(poQty(r))}) ÷ 하루판매 = ${fmtNum(Math.round(R.days))}일치`,
+            `보유 ${fmtNum(have)}개 (현재고 ${fmtNum(r.stock)} + 입고예정 ${fmtNum(poQty(r))}) ÷ 하루판매 ÷ 30 = ${(R.days/30).toFixed(1)}개월`,
             isBj ? `기준: ${S.need}일 미만 발주필요 · ${S.need}~${S.review}일 발주검토` : `기준: ${P.lead+P.safety}일치 미만 발주필요`,
             ...(need ? [isBj ? `발주수량 = 하루 ${r1(rate)}개 × 목표 ${S.target}일 − 보유 ${fmtNum(have)}개 = ${fmtNum(needQty)}개` : `발주수량 = ${P.lead+P.safety+P.cycle}일치 − 보유 = ${fmtNum(needQty)}개`] : []),
             ...(urgent ? [`결품 예상: 보유일수가 리드타임(${isBj?BJ_LEAD_DAYS:P.lead}일)보다 짧음`] : []),
             ...(review ? [`약 ${R.until}일 뒤 발주필요`] : []) ];
       const tip=` title="${escAttr(tipLines.join('\n'))}"`;
       const daysTxt = stop ? '-' : fr.allOut ? `<span class="bj-mon">${BJD.RATE_DAYS}일 품절</span>` : fr.hold ? `<span class="bj-mon">판단 보류 (${fr.stockDays}일)</span>`
-        : !(rate>0) ? '-' : `${fmtNum(Math.round(R.days))}일 <span class="bj-mon">(${(R.days/30).toFixed(1)}개월)</span>`;
+        : !(rate>0) ? '-' : `${(R.days/30).toFixed(1)}개월`;   // [2026-11-25] 월 단위만 (사용자 요청)
       html+=`<tr class="${i===0?'bj-first':''}${need?' bj-need':''}${urgent?' bj-urgent':''}${review?' bj-review':''}${stop?' bj-stop':''}"${tip}>`+
         (i===0?`<td rowspan="${span}" class="bj-merge bj-img">${g.img?`<div class="bj-crop"><img src="${escAttr(g.img)}" alt="${esc(g.model)} ${esc(g.color)}" loading="lazy"></div>`:''}</td>`+
                `<td rowspan="${span}" class="bj-merge bj-model">${esc(g.model)||'-'}<div class="bj-brand">${esc(g.brand)}</div>${g.rows.some(x=>x.isNewModel)?'<div><span class="bj-new-tag">신규모델</span></div>':''}</td>`+
@@ -1896,12 +1908,12 @@ function renderBjTable(){
         `<td><a class="bj-code" data-code="${escAttr(r.code)}" href="#">${esc(r.code)}</a>${pname?`<div class="bj-pname" title="${escAttr(r.name)}">${esc(pname)}</div>`:''}</td><td class="num">${esc(r.size)||'-'}${isBj&&BJ_EU[String(r.size).trim()]?`<span class="bj-eu">(${BJ_EU[String(r.size).trim()]})</span>`:''}</td>`+
         `<td class="num">${r.inQty==null?'-':fmtNum(r.inQty)}</td><td class="num">${fmtNum(r.cumQty)}</td><td class="num">${ratio}</td><td class="num">${fmtNum(r.last30||0)}</td>`+
         `<td class="num">${fmtNum(r.stock)}</td>`+
-        `<td class="num${needQty>0?' bj-needqty':''}">${stop?`<span class="bj-stop-tag">${stop}</span>`:''}${urgent?'<span class="bj-urgent-tag">결품 예상</span>':''}${needQty>0?fmtNum(needQty):(review?`<span class="bj-until">약 ${fmtNum(R.until)}일 뒤</span>`:'-')}</td>`+
+        `<td class="num${needQty>0?' bj-needqty':''}">${stop?`<span class="bj-stop-tag">${stop}</span>`:''}${urgent?'<span class="bj-urgent-tag" title="결품 예상: 보유가 리드타임보다 짧음">결품</span>':''}${needQty>0?fmtNum(needQty):(review?`<span class="bj-until">약 ${fmtNum(R.until)}일 뒤</span>`:'-')}</td>`+
         `<td class="num">${poQty(r)>0?`<span class="bj-po" data-code="${escAttr(r.code)}">${fmtNum(poQty(r))}</span>`:'-'}</td>`+
         `<td class="num bj-days">${daysTxt}</td></tr>`;
     });
     if(n>1){
-      html+=`<tr class="bj-total"><td>합계</td><td class="num">${n}개 사이즈</td>`+
+      html+=`<tr class="bj-total"><td>합계</td><td class="num">${n}개</td>`+
         `<td class="num">${T.inNull?'-':fmtNum(T.inQ)}</td><td class="num">${fmtNum(T.sold)}</td><td class="num">${gSold>0?'100%':'-'}</td><td class="num">${fmtNum(T.m1)}</td>`+
         `<td class="num">${fmtNum(T.stock)}</td><td class="num">${T.need>0?fmtNum(T.need):'-'}</td><td class="num">${T.po>0?fmtNum(T.po):'-'}</td><td class="num"></td></tr>`;
     }
@@ -2175,18 +2187,18 @@ function renderBjDetail(){
   const isBj=String(it.brand||'').trim()==='바오지', S=bjSettings();
   const R=isBj ? bjRule(fr.rate, have, stop, S)
     : {days: fr.rate>0 ? have/fr.rate : Infinity, need:!!it.needOrder, qty:it.shortage||0};
-  const daysTd = stop ? '-' : !(fr.rate>0) ? '-' : `${fmtNum(Math.round(R.days))}일 (${(R.days/30).toFixed(1)}개월)`;
+  const daysTd = stop ? '-' : !(fr.rate>0) ? '-' : `${(R.days/30).toFixed(1)}개월`;
   const qtyTd = stop ? `${stop} · 발주 안 함` : R.need ? `${fmtNum(R.qty)}개` : '-';
   const qtySub = stop ? '' : !(fr.rate>0) ? '하루판매 0 → 판단 안 함'
     : isBj ? (R.need ? `${r1(fr.rate)} × ${S.target}일 − ${fmtNum(have)}` : `보유 ${S.need}일 이상 → 발주 안 함`)
     : (R.need ? '28일치 − 보유' : '발주 안 함');
   document.getElementById('bjd-rate').innerHTML =
     `<caption>하루 판매량·발주 계산 (${bjdMD(new Date(bjdBaseEnd()-BJD.RATE_DAYS*DAY))} ~ ${bjdMD(new Date(bjdBaseEnd()-DAY))}, 최근 ${BJD.RATE_DAYS}일)</caption>`+
-    `<tr><th>재고 있던 날</th><th>판매수량</th><th>일평균</th><th>현재고${po?' + 입고예정':''}</th><th>보유일수</th><th>발주필요수량</th></tr>`+
+    `<tr><th>재고 있던 날</th><th>판매수량</th><th>일평균</th><th>현재고${po?' + 입고예정':''}</th><th>보유개월</th><th>발주필요수량</th></tr>`+
     `<tr><td>${fmtNum(fr.stockDays)}일</td><td>${fmtNum(fr.total)}개</td><td class="res">${rateRes}</td>`+
       `<td>${po?`${fmtNum(it.stock)} + ${fmtNum(po)} = ${fmtNum(have)}개`:`${fmtNum(it.stock)}개`}</td><td>${daysTd}</td><td class="res">${qtyTd}</td></tr>`+
     `<tr><td class="sub">${fr.outDays>0?`품절 ${fmtNum(fr.outDays)}일 제외`:'품절일 없음'}</td><td class="sub">일반판매 + 체험단</td><td class="sub">판매수량 ÷ 재고 있던 날 (소수점 첫째 자리 반올림)${fr.hold?` · ${BJD_MIN_STOCK_DAYS}일 미만은 보류`:''}</td>`+
-      `<td class="sub">${po?'현재고 + 입고예정':'입고예정 없음'}</td><td class="sub">보유 ÷ 일평균</td><td class="sub">${qtySub}</td></tr>`;
+      `<td class="sub">${po?'현재고 + 입고예정':'입고예정 없음'}</td><td class="sub">보유 ÷ 일평균 ÷ 30</td><td class="sub">${qtySub}</td></tr>`;
   document.getElementById('bjd-tbody').innerHTML =
     fc.slice().reverse().map(f=>`<tr class="fc"><td>${bjdMD(f.s)} ~ ${bjdMD(new Date(f.s.getTime()+6*DAY))} (예측)</td><td class="num">-</td><td class="num">-</td><td class="num">${Math.round(f.sales*10)/10}</td><td class="num">-</td><td class="num">-</td><td class="num">${fmtNum(curSafety)}</td><td class="num">${Math.round(f.stock)}</td></tr>`).join('')+
     weeks.slice().reverse().map(w=>{ const wi=weeks.indexOf(w); const sl=(v,t,show)=>v?`<a class="bjd-sl" href="#" data-w="${wi}" data-t="${t}">${fmtNum(v)}</a>`:(show?'0':'-');
@@ -2254,11 +2266,11 @@ document.getElementById('bj-exportBtn').addEventListener('click',()=>{
   // [2026-10-27] 상품명·EDP넘버 추가, 머리글 색·필터·틀고정 (SheetJS 무료판은 칸 색을 못 써서 bjXlsx로 직접 만듦)
   const cols=[{h:'브랜드',w:11},{h:'모델',w:12},{h:'색상',w:11},{h:'상품코드',w:20},{h:'상품명',w:40},{h:'EDP넘버',w:18},{h:'사이즈',w:7,al:'c'},
     {h:'누적입고수량',w:11,t:'n'},{h:'누적판매수량',w:11,t:'n'},{h:'누적판매비율',w:11,t:'p'},{h:'최근1개월판매',w:12,t:'n'},{h:'현재고',w:8,t:'n'},{h:'발주필요수량',w:11,t:'n'},{h:'입고예정수량',w:11,t:'n'},
-    {h:'입고예정 상세(차수·예정일·수량·상태·비고)',w:48},{h:'보유일수',w:9,t:'n'},{h:'발주필요',w:18}];
+    {h:'입고예정 상세(차수·예정일·수량·상태·비고)',w:48},{h:'보유개월',w:9,t:'d1'},{h:'발주필요',w:18}];
   const data=rows.map(r=>{
     const lines=(state.poLines&&state.poLines[r.code])||[];
     const detail=lines.map((l,i)=>`${i+1}차 ${fd(l.date)} ${l.qty}개 ${l.status||''}${l.note?' ('+l.note+')':''}`.trim()).join(' / ');
-    return [r.brand, r.model, r.color, r.code, r.name, r.edp, r.size, r.inQty, r.sold, r.ratio, r.last30, r.stock, r.needQty||null, r.po||null, detail, (r.stop||!isFinite(r.days))?null:Math.round(r.days), r.stop?r.stop:(r.urgent?'발주필요(결품 예상)':(r.need?'발주필요':(r.review?'발주검토':'')))];
+    return [r.brand, r.model, r.color, r.code, r.name, r.edp, r.size, r.inQty, r.sold, r.ratio, r.last30, r.stock, r.needQty||null, r.po||null, detail, (r.stop||!isFinite(r.days))?null:Math.round(r.days/30*10)/10, r.stop?r.stop:(r.urgent?'발주필요(결품 예상)':(r.need?'발주필요':(r.review?'발주검토':'')))];
   });
   const now=new Date();
   const ymd=now.getFullYear()+String(now.getMonth()+1).padStart(2,'0')+String(now.getDate()).padStart(2,'0');
@@ -2272,10 +2284,10 @@ function bjXlsx(fileName, sheetName, cols, data){
   const colL=n=>{ let s=''; n++; while(n){ const m=(n-1)%26; s=String.fromCharCode(65+m)+s; n=Math.floor((n-1)/26); } return s; };
   // 서식 번호: 0 기본 · 1 머리글 · 2 글자왼 · 3 글자가운데 · 4 숫자 · 5 비율
   const xf=(font,fill,al,num)=>`<xf numFmtId="${num}" fontId="${font}" fillId="${fill}" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"${num?' applyNumberFormat="1"':''} applyAlignment="1"><alignment horizontal="${al}" vertical="center"/></xf>`;
-  const xfs=['<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>', xf(1,2,'center',0), xf(0,0,'left',0), xf(0,0,'center',0), xf(0,0,'right',164), xf(0,0,'right',165)];
+  const xfs=['<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>', xf(1,2,'center',0), xf(0,0,'left',0), xf(0,0,'center',0), xf(0,0,'right',164), xf(0,0,'right',165), xf(0,0,'right',166)];   // 6 = 소수 1자리 (보유개월)
   const styles=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-<numFmts count="2"><numFmt numFmtId="164" formatCode="#,##0"/><numFmt numFmtId="165" formatCode="0.0%"/></numFmts>
+<numFmts count="3"><numFmt numFmtId="164" formatCode="#,##0"/><numFmt numFmtId="165" formatCode="0.0%"/><numFmt numFmtId="166" formatCode="0.0"/></numFmts>
 <fonts count="2"><font><sz val="10"/><name val="맑은 고딕"/><family val="3"/><charset val="129"/></font><font><b/><sz val="10"/><name val="맑은 고딕"/><family val="3"/><charset val="129"/></font></fonts>
 <fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>
 <fill><patternFill patternType="solid"><fgColor rgb="FFD9D9D9"/><bgColor indexed="64"/></patternFill></fill></fills>
@@ -2290,7 +2302,7 @@ function bjXlsx(fileName, sheetName, cols, data){
     const R=ri+2;
     sd+=`<row r="${R}">`+cols.map((c,j)=>{
       const x=v[j], ref=colL(j)+R;
-      if((c.t==='n'||c.t==='p') && typeof x==='number' && isFinite(x)) return `<c r="${ref}" s="${c.t==='p'?5:4}"><v>${x}</v></c>`;
+      if((c.t==='n'||c.t==='p'||c.t==='d1') && typeof x==='number' && isFinite(x)) return `<c r="${ref}" s="${c.t==='p'?5:c.t==='d1'?6:4}"><v>${x}</v></c>`;
       return `<c r="${ref}" t="inlineStr" s="${c.al==='c'?3:2}"><is><t xml:space="preserve">${X(x)}</t></is></c>`;
     }).join('')+'</row>';
   });
@@ -2520,7 +2532,9 @@ function ordRowsInRange(pFrom,pTo){
 function ordSearchMatch(r){
   const q=(state.ordSearch||'').trim().toLowerCase();
   if(!q) return true;
-  return searchMatch(q, [r.code,r.model,r.channel,r.category,r.brand,r.dateStr,r.type,r.gender]);
+  // [2026-11-25] 재고표와 같은 칸(색상·사이즈·상품명)도 찾음. 색상·상품명은 주문로그에 없어 재고표에서 가져옴
+  const it=(state.invByCode&&state.invByCode[r.code])||{};
+  return searchMatch(q, [r.code,r.model,r.channel,r.category,r.brand,r.dateStr,r.type,r.gender,r.size,it.color,it.name]);
 }
 /* [2026-11-18] 공통 검색 규칙: 쉼표로 나눈 묶음 중 하나라도 맞으면 표시(또는),
    한 묶음 안의 띄어쓴 단어는 모두 어느 칸엔가 들어 있어야 함(그리고). */
@@ -2858,8 +2872,20 @@ function breakdownTooltipLabel(ctx, both, total, extra){
   return lines;
 }
 
-function renderBreakdownDoughnutOrBar(canvasId, field, labels, g, colors, extraOnClick, both, extra){
+function renderBreakdownDoughnutOrBar(canvasId, field, labels, g, colors, extraOnClick, both, extra, forceBar){
   const isAmt = state.ordMetric==='amount';
+  // [2026-11-25] 라인업별 판매는 수량일 때도 막대 (사용자 요청)
+  if(forceBar && !isAmt){
+    const total = labels.reduce((a,l)=>a+(g[l]||0),0);
+    mk(canvasId,{type:'bar',data:{labels,datasets:[{data:labels.map(l=>g[l]),backgroundColor:'#2C4BB8',borderRadius:4,maxBarThickness:22}]},
+      options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+        onClick:(e,el)=>{if(el.length)extraOnClick(labels[el[0].index]);},
+        plugins:{legend:{display:false},tooltip:{...tip,callbacks: both ? { title:c=>c[0].label, label:c=>breakdownTooltipLabel(c, both, total, extra) }
+          : {label:c=>` ${fmtNum(c.parsed.x)}개 (${total?(c.parsed.x/total*100).toFixed(1):0}%)`}}},
+        scales:{x:{grid:{color:GRID},ticks:{callback:v=>fmtNum(v),font:{size:10}}},
+          y:{grid:{display:false},ticks:{font:{size:10}}}}}});
+    return;
+  }
   const total = labels.reduce((a,l)=>a+(g[l]||0),0);
   const tipCb = both
     ? { title:c=>c[0].label, label:c=>breakdownTooltipLabel(c, both, total, extra) }
@@ -2911,7 +2937,7 @@ function renderOrdModel(){
   });
   const extra = {};
   Object.keys(catOf).forEach(m=>{ const s=[...catOf[m]]; if(s.length) extra[m] = '카테고리: '+s.join(', '); });
-  renderBreakdownDoughnutOrBar('o-ch-model','model',labels,g,PALETTE.concat(['#C7CEE0','#A9B4C9','#8E9BB4']),v=>{if(v!=='기타')applyOrdChartFilter('model',v);},both,extra);
+  renderBreakdownDoughnutOrBar('o-ch-model','model',labels,g,PALETTE.concat(['#C7CEE0','#A9B4C9','#8E9BB4']),v=>{if(v!=='기타')applyOrdChartFilter('model',v);},both,extra,true);
 }
 function renderOrdChannel(){
   const rows=ordFilteredRows();
@@ -3256,8 +3282,16 @@ function otCols(){
   return state.hasPrice ? OTCOLS.concat([{k:'amount',t:'매출액',num:1}]) : OTCOLS;
 }
 function ordTableRows(){
-  // 검색어는 이제 ordFilteredRows() 단계에서 이미 걸렸으므로 여기서는 정렬만 합니다
-  let rows=ordFilteredRows();
+  // 검색어는 이제 ordFilteredRows() 단계에서 이미 걸렸으므로 여기서는 묶기·정렬만 합니다
+  /* [2026-11-25] 같은 날·같은 판매처·같은 상품코드·같은 출고유형은 한 줄로 묶고 수량·매출액을 더함 (사용자 요청)
+     n = 묶인 주문 건수 */
+  const grp={}; let rows=[];
+  ordFilteredRows().forEach(r=>{
+    const k=(r.date?fmtDate(r.date):'')+'|'+r.channel+'|'+r.code+'|'+r.type;
+    const g=grp[k];
+    if(g){ g.qty+=r.qty||0; g.amount=(g.amount||0)+(r.amount||0); g.n++; }
+    else { grp[k]={...r, qty:r.qty||0, amount:r.amount||0, n:1}; rows.push(grp[k]); }
+  });
   const {col,dir}=state.ordSort;
   rows=rows.slice().sort((a,b)=>{let x=a[col],y=b[col];
     if(col==='date'){x=x?x.getTime():0;y=y?y.getTime():0;}
@@ -3278,7 +3312,7 @@ function renderOrdTable(){
   document.getElementById('o-tbody').innerHTML = rows.slice(0,MAX).map(r=>'<tr>'+COLS.map(c=>{
     if(c.k==='date') return `<td>${fmtDate(r.date)}</td>`;
     if(c.k==='code') return `<td>${codeLink(r.code)}</td>`;
-    if(c.k==='qty')  return `<td class="num">${fmtNum(r.qty)}</td>`;
+    if(c.k==='qty')  return `<td class="num"${r.n>1?` title="같은 날·같은 판매처 주문 ${r.n}건을 묶음"`:''}>${fmtNum(r.qty)}${r.n>1?`<span class="o-cnt">(${r.n}건)</span>`:''}</td>`;
     if(c.k==='amount'){
       /* 가격이 없어 0 이 된 건은 빨갛게 — 위 차트에서 막대가 비어 보이는 이유입니다.
          체험단·샘플처럼 원래 무상인 건은 그냥 회색으로 둡니다. */
@@ -3288,7 +3322,8 @@ function renderOrdTable(){
     return `<td class="${c.num?'num':''}">${r[c.k]==null?'':r[c.k]}</td>`;
   }).join('')+'</tr>').join('')
     || `<tr><td colspan="${COLS.length}" style="text-align:center;padding:30px;color:var(--text-tertiary)">조건에 맞는 데이터가 없습니다.</td></tr>`;
-  document.getElementById('o-rowCount').textContent = `${fmtNum(rows.length)}건`+(rows.length>MAX?` (상위 ${MAX}건 표시)`:'');
+  const ordCnt=rows.reduce((a,r)=>a+(r.n||1),0);
+  document.getElementById('o-rowCount').textContent = `${fmtNum(rows.length)}줄 (주문 ${fmtNum(ordCnt)}건)`+(rows.length>MAX?` · 상위 ${MAX}줄 표시`:'');
 }
 
 ['brand'].forEach(k=>{   // [2026-11-09] 카테고리는 체크박스로 바뀌어 buildMultiSelect가 처리
