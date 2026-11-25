@@ -299,6 +299,9 @@ tbody tr.need td{background:rgba(212,47,82,.08);}
 #bj-table td.bj-needqty{color:var(--color-error-fg);font-weight:700;}
 #bj-table td.bj-model{font-weight:700;}
 #bj-table tr.bj-first td{border-top:2px solid var(--border-strong);}
+/* [2026-11-25] 모델·색상 합계 줄 */
+#bj-table tr.bj-total td{background:rgba(17,17,17,.05);font-weight:700;color:var(--text-primary);border-top:1px solid var(--border-strong);}
+#bj-table tr.bj-total td:first-child{text-align:center;}
 #bj-table tbody tr:hover td.bj-merge{background:var(--bg-elevated);}
 #bj-table th.num, #bj-table td.num{text-align:center;}
 #bj-card .tbl-scroll{max-height:80vh;}
@@ -1846,6 +1849,9 @@ function renderBjTable(){
     let pre=0;
     if(nmWords.length>1){ while(nmWords.every(w=>w.length>pre+1 && w[pre]===nmWords[0][pre])) pre++; }
     const shortName=r=> (r.color||!r.name) ? '' : String(r.name).trim().split(/\s+/).slice(pre).join(' ');
+    // [2026-11-25] 같은 모델·색상 합계 줄 (SKU가 2개 이상일 때만). 이미지·모델·색상 칸은 합계 줄까지 합침
+    const span = n>1 ? n+1 : n;
+    const T={inQ:0, inNull:true, sold:0, m1:0, stock:0, need:0, po:0};
     g.rows.forEach((r,i)=>{
       const pname=shortName(r);
       const fr=bjdForecastRate(r.code, today), rate=fr.rate;   // [2026-10-27] 재고 있던 날 기준. 품절·보류는 rate 0
@@ -1863,6 +1869,8 @@ function renderBjTable(){
       if(urgent) urgentCnt++;
       if(review) reviewCnt++;
       const ratio=gSold>0 ? Math.round(r.cumQty/gSold*1000)/10+'%' : '-';
+      if(r.inQty!=null){ T.inQ+=r.inQty; T.inNull=false; }
+      T.sold+=r.cumQty||0; T.m1+=r.last30||0; T.stock+=r.stock||0; T.need+=needQty>0?needQty:0; T.po+=poQty(r);
       exportRows.push({brand:g.brand, model:g.model, color:g.color, code:r.code, name:r.name, edp:r.edp, size:r.size, inQty:r.inQty, sold:r.cumQty,
         ratio: gSold>0 ? r.cumQty/gSold : null, last30:r.last30||0, stock:r.stock, needQty, po:poQty(r), days:R.days, need, urgent, review, stop});
       const r1=v=>Math.round(v*10)/10;
@@ -1882,9 +1890,9 @@ function renderBjTable(){
       const daysTxt = stop ? '-' : fr.allOut ? `<span class="bj-mon">${BJD.RATE_DAYS}일 품절</span>` : fr.hold ? `<span class="bj-mon">판단 보류 (${fr.stockDays}일)</span>`
         : !(rate>0) ? '-' : `${fmtNum(Math.round(R.days))}일 <span class="bj-mon">(${(R.days/30).toFixed(1)}개월)</span>`;
       html+=`<tr class="${i===0?'bj-first':''}${need?' bj-need':''}${urgent?' bj-urgent':''}${review?' bj-review':''}${stop?' bj-stop':''}"${tip}>`+
-        (i===0?`<td rowspan="${n}" class="bj-merge bj-img">${g.img?`<div class="bj-crop"><img src="${escAttr(g.img)}" alt="${esc(g.model)} ${esc(g.color)}" loading="lazy"></div>`:''}</td>`+
-               `<td rowspan="${n}" class="bj-merge bj-model">${esc(g.model)||'-'}<div class="bj-brand">${esc(g.brand)}</div>${g.rows.some(x=>x.isNewModel)?'<div><span class="bj-new-tag">신규모델</span></div>':''}</td>`+
-               `<td rowspan="${n}" class="bj-merge">${esc(g.color)||'-'}</td>`:'')+
+        (i===0?`<td rowspan="${span}" class="bj-merge bj-img">${g.img?`<div class="bj-crop"><img src="${escAttr(g.img)}" alt="${esc(g.model)} ${esc(g.color)}" loading="lazy"></div>`:''}</td>`+
+               `<td rowspan="${span}" class="bj-merge bj-model">${esc(g.model)||'-'}<div class="bj-brand">${esc(g.brand)}</div>${g.rows.some(x=>x.isNewModel)?'<div><span class="bj-new-tag">신규모델</span></div>':''}</td>`+
+               `<td rowspan="${span}" class="bj-merge">${esc(g.color)||'-'}</td>`:'')+
         `<td><a class="bj-code" data-code="${escAttr(r.code)}" href="#">${esc(r.code)}</a>${pname?`<div class="bj-pname" title="${escAttr(r.name)}">${esc(pname)}</div>`:''}</td><td class="num">${esc(r.size)||'-'}${isBj&&BJ_EU[String(r.size).trim()]?`<span class="bj-eu">(${BJ_EU[String(r.size).trim()]})</span>`:''}</td>`+
         `<td class="num">${r.inQty==null?'-':fmtNum(r.inQty)}</td><td class="num">${fmtNum(r.cumQty)}</td><td class="num">${ratio}</td><td class="num">${fmtNum(r.last30||0)}</td>`+
         `<td class="num">${fmtNum(r.stock)}</td>`+
@@ -1892,6 +1900,11 @@ function renderBjTable(){
         `<td class="num">${poQty(r)>0?`<span class="bj-po" data-code="${escAttr(r.code)}">${fmtNum(poQty(r))}</span>`:'-'}</td>`+
         `<td class="num bj-days">${daysTxt}</td></tr>`;
     });
+    if(n>1){
+      html+=`<tr class="bj-total"><td>합계</td><td class="num">${n}개 사이즈</td>`+
+        `<td class="num">${T.inNull?'-':fmtNum(T.inQ)}</td><td class="num">${fmtNum(T.sold)}</td><td class="num">${gSold>0?'100%':'-'}</td><td class="num">${fmtNum(T.m1)}</td>`+
+        `<td class="num">${fmtNum(T.stock)}</td><td class="num">${T.need>0?fmtNum(T.need):'-'}</td><td class="num">${T.po>0?fmtNum(T.po):'-'}</td><td class="num"></td></tr>`;
+    }
   });
   document.getElementById('bj-tbody').innerHTML=html;
   bjHqThumbs();
