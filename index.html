@@ -367,6 +367,13 @@ a.bj-code{color:var(--color-info-fg);text-decoration:underline;text-underline-of
 .bjd-sum > div{border:1px solid var(--border-default);border-radius:var(--radius-md);padding:9px 12px;}
 .bjd-sum > div.fc{border-style:dashed;border-color:var(--color-info-fg);}
 .bjd-sum .l{font-size:11.5px;color:var(--text-tertiary);} .bjd-sum .v{font-size:16px;font-weight:700;color:var(--text-primary);}
+/* [2026-11-25] 하루판매 계산표 (엑셀처럼 칸 테두리) */
+.bjd-rate{border-collapse:collapse;margin:0 0 10px;font-size:12.5px;}
+.bjd-rate caption{caption-side:top;text-align:left;font-size:11.5px;color:var(--text-tertiary);padding-bottom:4px;}
+.bjd-rate th,.bjd-rate td{border:1px solid var(--border-default);padding:6px 14px;text-align:center;font-variant-numeric:tabular-nums;}
+.bjd-rate th{background:rgba(17,17,17,.04);font-weight:600;color:var(--text-secondary);}
+.bjd-rate td.res{font-weight:700;color:var(--color-info-fg);}
+.bjd-rate td.sub{font-size:11px;color:var(--text-tertiary);}
 .bjd-note{font-size:11.5px;color:var(--text-tertiary);margin-bottom:8px;line-height:1.5;}
 #bjd-table th.num,#bjd-table td.num{text-align:center;}
 #bjd-table tr.fc td{color:var(--color-info-fg);font-style:italic;}
@@ -774,10 +781,11 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
           <div class="bjd-period" id="bjd-period">
             <span>지난 기간</span>
             <button type="button" data-w="8">8주</button><button type="button" data-w="13">13주</button><button type="button" data-w="26">26주</button>
-            <span class="bjd-hint">예측은 다음 8주(리드타임 약 50일)</span>
+            <span class="bjd-hint">예측은 다음 4주(약 1개월)</span>
           </div>
           <div class="bjd-chart"><canvas id="bjd-chart"></canvas></div>
           <div class="bjd-sum" id="bjd-sum"></div>
+          <table class="bjd-rate" id="bjd-rate"></table>
           <div class="bjd-note" id="bjd-note"></div>
           <div class="tbl-scroll" style="max-height:300px;"><table id="bjd-table"><thead><tr>
             <th>기간</th><th class="num">일반판매</th><th class="num">체험단</th><th class="num">판매 합계</th><th class="num">작년 동기</th><th class="num">입고</th><th class="num">안전재고</th><th class="num">주말 판매가능재고</th>
@@ -1864,7 +1872,7 @@ function renderBjTable(){
         : [ bjdRateText(fr),
             `보유 ${fmtNum(have)}개 (현재고 ${fmtNum(r.stock)} + 입고예정 ${fmtNum(poQty(r))}) ÷ 하루판매 = ${fmtNum(Math.round(R.days))}일치`,
             isBj ? `기준: ${S.need}일 미만 발주필요 · ${S.need}~${S.review}일 발주검토` : `기준: ${P.lead+P.safety}일치 미만 발주필요`,
-            ...(need ? [isBj ? `발주수량 = 하루 ${r2(rate)}개 × 목표 ${S.target}일 − 보유 ${fmtNum(have)}개 = ${fmtNum(needQty)}개` : `발주수량 = ${P.lead+P.safety+P.cycle}일치 − 보유 = ${fmtNum(needQty)}개`] : []),
+            ...(need ? [isBj ? `발주수량 = 하루 ${r1(rate)}개 × 목표 ${S.target}일 − 보유 ${fmtNum(have)}개 = ${fmtNum(needQty)}개` : `발주수량 = ${P.lead+P.safety+P.cycle}일치 − 보유 = ${fmtNum(needQty)}개`] : []),
             ...(urgent ? [`결품 예상: 보유일수가 리드타임(${isBj?BJ_LEAD_DAYS:P.lead}일)보다 짧음`] : []),
             ...(review ? [`약 ${R.until}일 뒤 발주필요`] : []) ];
       const tip=` title="${escAttr(tipLines.join('\n'))}"`;
@@ -1943,7 +1951,7 @@ const BJ_EU = {'235':37,'240':38,'245':39,'250':40,'255':41,'260':41,'265':42,'2
    - 판매량 = 일반판매 + 체험단 (샘플·유투버·직원구매 등 기타출고 제외)
    - 예측 하루 판매량 = 최근 2개월(60일, 기준일까지) 판매량 ÷ 60 (단순 평균)
    - 안전재고 = 1.65 × 일판매 표준편차(최근 2개월) × √리드타임 50일 (품절 없이 버틸 확률 약 95%) */
-const BJD = {code:null, weeks:13, FC_WEEKS:8, RATE_DAYS:60, LEAD_DAYS:50, Z:1.65};
+const BJD = {code:null, weeks:13, FC_WEEKS:4,   /* [2026-11-25] 예측 8주 → 4주(약 1개월) 사용자 요청 */ RATE_DAYS:60, LEAD_DAYS:50, Z:1.65};
 const DAY=86400000;
 const bjdIsSale = o => o.type==='일반판매' || o.type==='체험단';
 function bjdSafety(code, endT){
@@ -2003,8 +2011,8 @@ function bjdForecastRate(code, today){
 // [2026-10-27] 마우스 올렸을 때 보이는 하루판매 설명 (짧게)
 function bjdRateText(fr){
   if(fr.allOut) return '최근 60일 내내 품절 → 하루판매 계산 불가 (발주 판단 안 함)';
-  if(fr.hold) return `재고 있던 날 ${fr.stockDays}일뿐 (${BJD_MIN_STOCK_DAYS}일 미만) → 판단 보류\n참고: 판매 ${fmtNum(fr.total)}개 ÷ ${fr.stockDays}일 = ${Math.round(fr.rawRate*100)/100}개`;
-  return `하루판매 ${Math.round(fr.rate*100)/100}개 = 60일 판매 ${fmtNum(fr.total)}개 ÷ 재고 있던 날 ${fr.stockDays}일`+(fr.outDays>0?` (품절 ${fr.outDays}일 제외)`:'');
+  if(fr.hold) return `재고 있던 날 ${fr.stockDays}일뿐 (${BJD_MIN_STOCK_DAYS}일 미만) → 판단 보류\n참고: 판매 ${fmtNum(fr.total)}개 ÷ ${fr.stockDays}일 = ${Math.round(fr.rawRate*10)/10}개`;
+  return `하루판매 ${Math.round(fr.rate*10)/10}개 = 60일 판매 ${fmtNum(fr.total)}개 ÷ 재고 있던 날 ${fr.stockDays}일`+(fr.outDays>0?` (품절 ${fr.outDays}일 제외)`:'');
 }
 
 /* [2026-10-16] 판매·발주 기준 통일 (사용자 확정)
@@ -2127,17 +2135,26 @@ function renderBjDetail(){
   const fmtD=d=>`${d.getFullYear()}-${bjdMD(d)}`;
   document.getElementById('bjd-sum').innerHTML =
     `<div><div class="l">지난 ${N}주 판매</div><div class="v">${fmtNum(pastSum)}개</div></div>`+
-    `<div class="fc"><div class="l">예측 하루 판매량</div><div class="v">${fr.rate>0?(Math.round(fr.rate*100)/100):'0'}개</div></div>`+
+    `<div class="fc"><div class="l">예측 하루 판매량</div><div class="v">${fr.rate>0?(Math.round(fr.rate*10)/10):'0'}개</div></div>`+
     `<div class="fc"><div class="l">다음 ${F}주 예측 판매</div><div class="v">${fmtNum(Math.round(fr.rate*7*F))}개</div></div>`+
     `<div class="fc"><div class="l">예상 품절일</div><div class="v">${outDate?fmtD(outDate)+` (${fmtNum(outDays)}일)`:'판매 없음'}</div></div>`+
     `<div><div class="l">안전재고 (현재)</div><div class="v">${fmtNum(curSafety)}개</div></div>`;
   const notes=[`판매량 = 일반판매 + 체험단 (샘플·유투버 등 기타출고 제외).`,
-    `예측 기준 (${bjdMD(new Date(bjdBaseEnd()-DAY))}까지 60일): ${bjdRateText(fr).replace('\n',' · ')}. 입고예정은 예측에 넣지 않았습니다.`,
+    `입고예정은 예측에 넣지 않았습니다.`,
     `안전재고 = 1.65 × 최근 2개월 일판매 표준편차 × √50일(리드타임). 판매가 들쑥날쑥할수록 커집니다.`];
   if(!hasLog) notes.push('지난 주의 판매가능재고 선은 입고로그 데이터가 있어야 그려집니다(매크로 수정본 적용 후 표시).');
   else notes.push('지난 주의 판매가능재고 = 현재고 + 그 뒤 판매 − 그 뒤 입고(입고입력 반영완료 기준). 월마감으로 옮겨진 입고는 빠질 수 있습니다.');
   if(weeks.every(w=>w.ly==null)) notes.push(`작년 동기 판매는 주문 기록이 ${firstOrd?fmtD(firstOrd):'-'}부터라 아직 비교할 수 없습니다.`);
   document.getElementById('bjd-note').textContent=notes.join(' ');
+  // [2026-11-25] 하루판매 계산법을 표로 (사용자 요청). 일평균은 소수점 첫째 자리까지
+  const r1=v=>Math.round(v*10)/10;
+  const rateRes = fr.allOut ? '계산 불가 (60일 내내 품절)'
+    : fr.hold ? `판단 보류 (참고 ${r1(fr.rawRate)}개)` : `${r1(fr.rate)}개`;
+  document.getElementById('bjd-rate').innerHTML =
+    `<caption>하루 판매량 계산 (${bjdMD(new Date(bjdBaseEnd()-60*DAY))} ~ ${bjdMD(new Date(bjdBaseEnd()-DAY))}, 최근 60일)</caption>`+
+    `<tr><th>재고 있던 날</th><th>판매수량</th><th>일평균</th></tr>`+
+    `<tr><td>${fmtNum(fr.stockDays)}일</td><td>${fmtNum(fr.total)}개</td><td class="res">${rateRes}</td></tr>`+
+    `<tr><td class="sub">${fr.outDays>0?`품절 ${fmtNum(fr.outDays)}일 제외`:'품절일 없음'}</td><td class="sub">일반판매 + 체험단</td><td class="sub">판매수량 ÷ 재고 있던 날${fr.hold?` · ${BJD_MIN_STOCK_DAYS}일 미만은 보류`:''}</td></tr>`;
   document.getElementById('bjd-tbody').innerHTML =
     fc.slice().reverse().map(f=>`<tr class="fc"><td>${bjdMD(f.s)} ~ ${bjdMD(new Date(f.s.getTime()+6*DAY))} (예측)</td><td class="num">-</td><td class="num">-</td><td class="num">${Math.round(f.sales*10)/10}</td><td class="num">-</td><td class="num">-</td><td class="num">${fmtNum(curSafety)}</td><td class="num">${Math.round(f.stock)}</td></tr>`).join('')+
     weeks.slice().reverse().map(w=>{ const wi=weeks.indexOf(w); const sl=(v,t,show)=>v?`<a class="bjd-sl" href="#" data-w="${wi}" data-t="${t}">${fmtNum(v)}</a>`:(show?'0':'-');
